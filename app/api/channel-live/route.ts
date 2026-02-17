@@ -102,53 +102,75 @@ export async function GET(request: NextRequest) {
     // Search for "videoId" with value pattern
     const videoIdMatches = html.match(/"videoId"\s*:\s*"([a-zA-Z0-9_-]{11})"/g)
     if (videoIdMatches) {
-      addLog(`Found ${videoIdMatches.length} video IDs in HTML`)
+      addLog(`Found ${videoIdMatches.length} videoId entries in HTML`)
     }
 
-    // Search for live specific markers
-    const hasIsLiveContent = html.includes('"isLiveContent":true')
-    const hasIsLiveNow = html.includes('"isLiveNow":true')
-    const hasLiveStreamability = html.includes('"liveStreamability"')
+    // Extract the first videoId for fallback
+    let firstVideoId: string | undefined
+    const firstVidMatch = html.match(/"videoId"\s*:\s*"([a-zA-Z0-9_-]{11})"/)
+    if (firstVidMatch?.[1]) {
+      firstVideoId = firstVidMatch[1]
+    }
 
-    addLog(`"isLiveContent":true found: ${hasIsLiveContent}`)
-    addLog(`"isLiveNow":true found: ${hasIsLiveNow}`)
-    addLog(`"liveStreamability" found: ${hasLiveStreamability}`)
+    // Search for live specific markers using regex (with flexible spacing)
+    const liveNowMatch = html.match(/"isLiveNow"\s*:\s*true/)
+    const liveContentMatch = html.match(/"isLiveContent"\s*:\s*true/)
+    const upcomingMatch = html.match(/"isUpcoming"\s*:\s*true/)
+    const liveStreamabilityMatch = html.match(/"liveStreamability"/)
 
-    // If we find a live marker, extract the first video ID
-    if (hasIsLiveContent || hasIsLiveNow || hasLiveStreamability) {
+    const hasLiveNow = !!liveNowMatch
+    const hasLiveContent = !!liveContentMatch
+    const hasUpcoming = !!upcomingMatch
+    const hasLiveStreamability = !!liveStreamabilityMatch
+
+    addLog(`"isLiveNow": ${hasLiveNow}`)
+    addLog(`"isLiveContent": ${hasLiveContent}`)
+    addLog(`"isUpcoming": ${hasUpcoming}`)
+    addLog(`"liveStreamability": ${hasLiveStreamability}`)
+
+    // Logic: 
+    // - If isLiveNow=true, it's actively live
+    // - If isLiveContent=true AND isUpcoming=false, it's live or was recently live
+    // - If liveStreamability exists, the stream has/had live capability
+    const isLive = hasLiveNow || (hasLiveContent && !hasUpcoming) || (hasLiveStreamability && firstVideoId)
+
+    if (isLive) {
+      addLog(`Live stream detected! Looking for video ID...`)
+
       // Find the video ID associated with the live content
-      // Search backwards from the live marker to find the videoId
-      const liveIndex = Math.max(
-        html.lastIndexOf('"isLiveContent":true'),
-        html.lastIndexOf('"isLiveNow":true'),
-        html.lastIndexOf('"liveStreamability"')
-      )
+      let videoId: string | undefined = firstVideoId
 
-      if (liveIndex > 0) {
-        // Look for videoId in the ~500 chars before the live marker
-        const contextBefore = html.substring(Math.max(0, liveIndex - 2000), liveIndex)
-        const vidMatch = contextBefore.match(/"videoId"\s*:\s*"([a-zA-Z0-9_-]{11})"/)
+      // Search around the live markers for the specific videoId
+      if (liveNowMatch) {
+        const liveIndex = html.indexOf(liveNowMatch[0])
+        const context = html.substring(Math.max(0, liveIndex - 1000), liveIndex + 500)
+        const vidMatch = context.match(/"videoId"\s*:\s*"([a-zA-Z0-9_-]{11})"/)
+        if (vidMatch?.[1]) videoId = vidMatch[1]
+      } else if (liveContentMatch) {
+        const liveIndex = html.indexOf(liveContentMatch[0])
+        const context = html.substring(Math.max(0, liveIndex - 1000), liveIndex + 500)
+        const vidMatch = context.match(/"videoId"\s*:\s*"([a-zA-Z0-9_-]{11})"/)
+        if (vidMatch?.[1]) videoId = vidMatch[1]
+      }
 
-        if (vidMatch?.[1]) {
-          const videoId = vidMatch[1]
-          addLog(`✅ LIVE DETECTED via HTML markers! Video ID: ${videoId}`)
-          return NextResponse.json(
-            {
-              live: true,
-              videoId,
-              method: 'html-markers',
-              debug: debug ? log : undefined
-            },
-            { status: 200 }
-          )
-        }
+      if (videoId) {
+        addLog(`✅ LIVE DETECTED via HTML markers! Video ID: ${videoId}`)
+        return NextResponse.json(
+          {
+            live: true,
+            videoId,
+            method: 'html-markers',
+            debug: debug ? log : undefined
+          },
+          { status: 200 }
+        )
       }
     }
 
     // Diagnostic mode: show HTML snippet for analysis
     if (diagnose === true) {
-      const snippet = html.substring(0, 3000)
-      addLog(`Diagnostic mode - showing first 3000 chars of HTML`)
+      const snippet = html.substring(0, 15000)
+      addLog(`Diagnostic mode - showing first 15000 chars of HTML`)
       return NextResponse.json(
         {
           live: false,
