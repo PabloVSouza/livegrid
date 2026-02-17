@@ -118,7 +118,7 @@ export async function GET(request: NextRequest) {
     const liveContentMatch = html.match(/"isLiveContent"\s*:\s*true/)
     const upcomingMatch = html.match(/"isUpcoming"\s*:\s*true/)
     const liveStreamabilityMatch = html.match(/"liveStreamability"/)
-    
+
     // Also search for alternative markers
     const videoBadgeMatch = html.match(/"videoBadgeRenderer"/)
     const liveChipMatch = html.match(/"liveChip"/)
@@ -134,7 +134,9 @@ export async function GET(request: NextRequest) {
     const hasIsLive = !!isLiveMatch
     const hasStatus = !!statusMatch
 
-    addLog(`Markers - isLiveNow: ${hasLiveNow}, isLiveContent: ${hasLiveContent}, isUpcoming: ${hasUpcoming}`)
+    addLog(
+      `Markers - isLiveNow: ${hasLiveNow}, isLiveContent: ${hasLiveContent}, isUpcoming: ${hasUpcoming}`
+    )
     addLog(`Markers - liveStreamability: ${hasLiveStreamability}, videoBadge: ${hasVideoBadge}`)
     addLog(`Markers - liveChip: ${hasLiveChip}, isLive: ${hasIsLive}, status: ${hasStatus}`)
 
@@ -144,7 +146,7 @@ export async function GET(request: NextRequest) {
     // - If liveStreamability exists, the stream has/had live capability
     // - Alternative markers: status="LIVE", isLive=true, videoBadge, liveChip
     const isLive =
-      hasLiveNow || 
+      hasLiveNow ||
       hasIsLive ||
       hasStatus ||
       hasVideoBadge ||
