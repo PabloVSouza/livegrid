@@ -11,12 +11,16 @@ const REQUEST_HEADERS: HeadersInit = {
   'user-agent':
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
   'accept-language': 'en-US,en;q=0.9',
+  'accept-encoding': 'gzip, deflate, br',
   accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
   'sec-fetch-dest': 'document',
   'sec-fetch-mode': 'navigate',
   'sec-fetch-site': 'none',
+  'sec-fetch-user': '?1',
   'cache-control': 'max-age=0',
-  cookie: 'CONSENT=YES+1'
+  'upgrade-insecure-requests': '1',
+  referer: 'https://www.youtube.com/',
+  cookie: 'CONSENT=YES+1; PREF=tz=America.Los_Angeles&f7=4000'
 }
 
 const isConsentInterstitialHtml = (html: string): boolean => {
@@ -37,6 +41,11 @@ const fetchHtml = async (
     headers: REQUEST_HEADERS
   })
   const html = await response.text()
+  
+  // Debug logging
+  console.log(`[channel-live] Fetched ${url} -> ${response.url}`)
+  console.log(`[channel-live] Status: ${response.status}, Size: ${html.length}`)
+  
   return { responseUrl: response.url, html, status: response.status }
 }
 
@@ -152,6 +161,33 @@ const extractInitialPlayerResponse = (html: string): InitialPlayerResponse | nul
   return null
 }
 
+const extractLiveIndicatorsFromHtml = (html: string): { isLive: boolean; videoId?: string } => {
+  // Check for live content indicators in various places
+  
+  // 1. Check for "isLiveContent":true in the HTML
+  const isLiveContentMatch = html.match(/"isLiveContent":\s*true/)
+  if (isLiveContentMatch) {
+    // Extract video ID if possible
+    const videoIdMatch = html.match(/"videoId":"([\w-]{11})"/)
+    return { isLive: true, videoId: videoIdMatch?.[1] }
+  }
+
+  // 2. Check for live manifest or streaming indicators
+  const hasLiveManifest = /hlsManifestUrl|dashManifestUrl/.test(html)
+  if (hasLiveManifest) {
+    const videoIdMatch = html.match(/"videoId":"([\w-]{11})"/)
+    return { isLive: true, videoId: videoIdMatch?.[1] }
+  }
+
+  // 3. Check for "isUpcoming":true to filter out scheduled streams
+  const isUpcomingMatch = html.match(/"isUpcoming":\s*true/)
+  if (isUpcomingMatch) {
+    return { isLive: false }
+  }
+
+  return { isLive: false }
+}
+
 export async function GET(request: NextRequest) {
   const channelId = request.nextUrl.searchParams.get('channelId')?.trim() || ''
 
@@ -229,6 +265,14 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // Fallback: try alternative detection if ytInitialPlayerResponse is missing
+    console.log('[channel-live] ytInitialPlayerResponse not found or invalid, trying alternative detection')
+    const altDetection = extractLiveIndicatorsFromHtml(html)
+    if (altDetection.isLive && altDetection.videoId) {
+      console.log(`[channel-live] Alternative detection found live stream: ${altDetection.videoId}`)
+      return NextResponse.json({ live: true, videoId: altDetection.videoId })
+    }
+
     // If parsing succeeds but no clear "live now" marker exists, treat as explicit offline.
     if (/watch\?v=/.test(html)) {
       return NextResponse.json({ live: false })
@@ -236,7 +280,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ live: false, uncertain: true })
   } catch (error) {
-    console.error('Channel live check error:', error)
+    console.error('[channel-live] Channel live check error for', channelId, ':', error)
     return NextResponse.json({ live: false, uncertain: true })
   }
 }
