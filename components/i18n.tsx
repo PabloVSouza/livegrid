@@ -48,6 +48,8 @@ type TranslationKey =
   | 'welcome.create'
   | 'welcome.projects'
   | 'welcome.openProject'
+  | 'welcome.deleteProject'
+  | 'welcome.deleteProjectConfirm'
   | 'welcome.noProjects'
   | 'welcome.channels'
   | 'welcome.presets'
@@ -96,6 +98,8 @@ const messages: Record<Locale, Partial<Record<TranslationKey, string>>> = {
     'welcome.create': 'Create Blank Grid',
     'welcome.projects': 'Your Projects',
     'welcome.openProject': 'Open Project',
+    'welcome.deleteProject': 'Delete Project',
+    'welcome.deleteProjectConfirm': 'Delete this project?',
     'welcome.noProjects': 'No projects yet. Create a blank grid or import a preset.',
     'welcome.channels': 'channels',
     'welcome.presets': 'Featured Projects',
@@ -144,6 +148,8 @@ const messages: Record<Locale, Partial<Record<TranslationKey, string>>> = {
     'welcome.create': 'Criar Grid Vazio',
     'welcome.projects': 'Seus Projetos',
     'welcome.openProject': 'Abrir Projeto',
+    'welcome.deleteProject': 'Excluir Projeto',
+    'welcome.deleteProjectConfirm': 'Excluir este projeto?',
     'welcome.noProjects': 'Nenhum projeto ainda. Crie um grid vazio ou importe um preset.',
     'welcome.channels': 'canais',
     'welcome.presets': 'Projetos em destaque',

@@ -1,8 +1,20 @@
 "use client"
 
+import { useState } from "react"
 import type { FC } from "react"
 import { Button } from "@/components/ui/button"
 import type { PresetDefinition } from "@/data/presets"
+import { Trash2 } from "lucide-react"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 
 interface ProjectPreview {
   id: string
@@ -16,6 +28,9 @@ interface WelcomeScreenProps {
   createLabel: string
   projectsTitle: string
   openProjectLabel: string
+  deleteProjectLabel: string
+  deleteProjectConfirm: string
+  cancelLabel: string
   noProjectsLabel: string
   channelsLabel: string
   presetsTitle: string
@@ -26,6 +41,7 @@ interface WelcomeScreenProps {
   loadingPresetId: string | null
   onCreateBlank: () => void
   onOpenProject: (projectId: string) => void
+  onDeleteProject: (projectId: string) => void
   onImportPreset: (preset: PresetDefinition) => void
 }
 
@@ -35,6 +51,9 @@ export const WelcomeScreen: FC<WelcomeScreenProps> = ({
   createLabel,
   projectsTitle,
   openProjectLabel,
+  deleteProjectLabel,
+  deleteProjectConfirm,
+  cancelLabel,
   noProjectsLabel,
   channelsLabel,
   presetsTitle,
@@ -45,8 +64,11 @@ export const WelcomeScreen: FC<WelcomeScreenProps> = ({
   loadingPresetId,
   onCreateBlank,
   onOpenProject,
+  onDeleteProject,
   onImportPreset
 }) => {
+  const [pendingDeleteProject, setPendingDeleteProject] = useState<ProjectPreview | null>(null)
+
   return (
     <div className="w-full h-full overflow-auto bg-black">
       <div className="max-w-6xl mx-auto px-6 py-10">
@@ -71,7 +93,18 @@ export const WelcomeScreen: FC<WelcomeScreenProps> = ({
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {projects.map((project) => (
                 <div key={project.id} className="bg-gray-900 border border-gray-800 rounded-lg p-4">
-                  <h4 className="text-white font-semibold truncate">{project.name}</h4>
+                  <div className="flex items-start justify-between gap-2">
+                    <h4 className="text-white font-semibold truncate">{project.name}</h4>
+                    <button
+                      type="button"
+                      title={deleteProjectLabel}
+                      aria-label={deleteProjectLabel}
+                      onClick={() => setPendingDeleteProject(project)}
+                      className="shrink-0 rounded p-1 text-gray-400 hover:bg-gray-800 hover:text-red-400 transition"
+                    >
+                      <Trash2 className="size-4" />
+                    </button>
+                  </div>
                   <p className="text-gray-400 text-sm mt-1 mb-3">
                     {project.channelsCount} {channelsLabel}
                   </p>
@@ -109,6 +142,43 @@ export const WelcomeScreen: FC<WelcomeScreenProps> = ({
           </div>
         </div>
       </div>
+
+      <AlertDialog
+        open={pendingDeleteProject !== null}
+        onOpenChange={(open) => {
+          if (!open) setPendingDeleteProject(null)
+        }}
+      >
+        <AlertDialogContent className="bg-gray-900 border-gray-700 text-white">
+          <AlertDialogHeader>
+            <AlertDialogTitle>{deleteProjectLabel}</AlertDialogTitle>
+            <AlertDialogDescription className="text-gray-300">
+              {deleteProjectConfirm}
+              {pendingDeleteProject ? (
+                <span className="block mt-2 text-white font-medium">{pendingDeleteProject.name}</span>
+              ) : null}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              className="bg-gray-800 border-gray-700 text-gray-100 hover:bg-gray-700 hover:text-gray-100"
+            >
+              {cancelLabel}
+            </AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 text-white hover:bg-red-700"
+              onClick={() => {
+                if (pendingDeleteProject) {
+                  onDeleteProject(pendingDeleteProject.id)
+                }
+                setPendingDeleteProject(null)
+              }}
+            >
+              {deleteProjectLabel}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

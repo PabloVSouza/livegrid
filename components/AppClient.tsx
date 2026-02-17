@@ -269,6 +269,11 @@ function AppClientContent() {
     updateActiveProjectLivestreams((current) => current.filter((stream) => stream.id !== id))
   }
 
+  const deleteProject = (projectId: string) => {
+    setProjects((prev) => prev.filter((project) => project.id !== projectId))
+    setActiveProjectId((prev) => (prev === projectId ? null : prev))
+  }
+
   useEffect(() => {
     if (!isHydrated || !activeProjectId || activeLivestreams.length === 0) {
       return
@@ -473,6 +478,9 @@ function AppClientContent() {
             createLabel={t('welcome.create')}
             projectsTitle={t('welcome.projects')}
             openProjectLabel={t('welcome.openProject')}
+            deleteProjectLabel={t('welcome.deleteProject')}
+            deleteProjectConfirm={t('welcome.deleteProjectConfirm')}
+            cancelLabel={t('input.cancel')}
             noProjectsLabel={t('welcome.noProjects')}
             channelsLabel={t('welcome.channels')}
             presetsTitle={t('welcome.presets')}
@@ -483,6 +491,7 @@ function AppClientContent() {
             loadingPresetId={isImportingPresetId}
             onCreateBlank={createBlankProject}
             onOpenProject={setActiveProjectId}
+            onDeleteProject={deleteProject}
             onImportPreset={importPresetProject}
           />
         ) : (
