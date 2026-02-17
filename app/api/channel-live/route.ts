@@ -204,9 +204,14 @@ export async function GET(request: NextRequest) {
 
       const isLiveNow = player.microformat?.playerMicroformatRenderer?.liveBroadcastDetails?.isLiveNow === true
       const isLiveContent = player.videoDetails.isLiveContent === true
+      const isUpcoming = player.videoDetails.isUpcoming === true
       const hasLiveStreamability = Boolean(player.playabilityStatus?.liveStreamability)
       const hasLiveManifest = Boolean(player.streamingData?.hlsManifestUrl)
-      const isLiveSignal = isLiveNow || isLiveContent || hasLiveStreamability || hasLiveManifest
+      
+      // isLiveContent is true for both upcoming AND currently-live streams
+      // We need to exclude upcoming streams to avoid false positives
+      const isActuallyLive = isLiveContent && !isUpcoming
+      const isLiveSignal = isLiveNow || isActuallyLive || hasLiveStreamability || hasLiveManifest
 
       if (isLiveSignal) {
         return NextResponse.json({ live: true, videoId: player.videoDetails.videoId })
