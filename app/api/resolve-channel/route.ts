@@ -13,6 +13,15 @@ const REQUEST_HEADERS: HeadersInit = {
   cookie: 'CONSENT=YES+cb.20210328-17-p0.en+FX+917'
 }
 
+const isConsentInterstitialHtml = (html: string): boolean => {
+  const head = html.slice(0, 12000)
+  return (
+    /Before you continue to YouTube/i.test(head) ||
+    /consent\.youtube\.com\/m\?/i.test(head) ||
+    /introAgreeButton/i.test(head)
+  )
+}
+
 const decodeHtml = (value: string): string =>
   value
     .replace(/&amp;/g, '&')
@@ -138,7 +147,7 @@ export async function GET(request: NextRequest) {
     }
 
     const html = await response.text()
-    if (/consent\.youtube\.com/i.test(html)) {
+    if (isConsentInterstitialHtml(html)) {
       return NextResponse.json({ error: 'Could not resolve channel (consent gate)' }, { status: 502 })
     }
     const channelId = extractChannelId(html)

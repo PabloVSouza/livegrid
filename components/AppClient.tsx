@@ -27,12 +27,6 @@ interface LiveGridProject {
   createdAt: string
 }
 
-const CHANNEL_LIVE_FALLBACK_PREFIX = 'live_channel:'
-const toChannelLiveFallbackVideoId = (channelId: string): string =>
-  `${CHANNEL_LIVE_FALLBACK_PREFIX}${channelId}`
-const isChannelLiveFallbackVideoId = (videoId?: string): boolean =>
-  typeof videoId === 'string' && videoId.startsWith(CHANNEL_LIVE_FALLBACK_PREFIX)
-
 interface StoredProject {
   id: string
   name: string
@@ -224,10 +218,7 @@ function AppClientContent() {
       channelUrl,
       channelId: resolved.channelId,
       title: resolvedTitle,
-      videoId:
-        liveVideoId === null
-          ? toChannelLiveFallbackVideoId(resolved.channelId)
-          : liveVideoId ?? undefined
+      videoId: liveVideoId ?? undefined
     }
   }
 
@@ -290,10 +281,6 @@ function AppClientContent() {
 
           const liveVideoId = await fetchCurrentLiveVideoId(stream.channelId)
           if (liveVideoId === null) {
-            // If backend detection is blocked (consent/rate-limited), use channel live embed fallback.
-            if (!stream.videoId || !isChannelLiveFallbackVideoId(stream.videoId)) {
-              return { ...stream, videoId: toChannelLiveFallbackVideoId(stream.channelId) }
-            }
             return stream
           }
           return { ...stream, videoId: liveVideoId }

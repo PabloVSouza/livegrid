@@ -13,6 +13,15 @@ const REQUEST_HEADERS: HeadersInit = {
   cookie: 'CONSENT=YES+cb.20210328-17-p0.en+FX+917'
 }
 
+const isConsentInterstitialHtml = (html: string): boolean => {
+  const head = html.slice(0, 12000)
+  return (
+    /Before you continue to YouTube/i.test(head) ||
+    /consent\.youtube\.com\/m\?/i.test(head) ||
+    /introAgreeButton/i.test(head)
+  )
+}
+
 const fetchHtml = async (url: string): Promise<{ responseUrl: string; html: string; status: number }> => {
   const response = await fetch(url, {
     redirect: 'follow',
@@ -47,6 +56,93 @@ const extractVideoId = (url: string): string | undefined => {
 
 const extractWatchEndpointVideoId = (html: string): string | undefined =>
   html.match(/\"watchEndpoint\"\s*:\s*\{[^}]*\"videoId\"\s*:\s*\"([\w-]{11})\"/)?.[1]
+
+const extractJsonObjectAfter = (source: string, marker: string): string | null => {
+  const markerIndex = source.indexOf(marker)
+  if (markerIndex === -1) return null
+
+  const start = source.indexOf('{', markerIndex + marker.length)
+  if (start === -1) return null
+
+  let depth = 0
+  let inString = false
+  let escaped = false
+
+  for (let i = start; i < source.length; i += 1) {
+    const char = source[i]
+
+    if (inString) {
+      if (escaped) {
+        escaped = false
+      } else if (char === '\\') {
+        escaped = true
+      } else if (char === '"') {
+        inString = false
+      }
+      continue
+    }
+
+    if (char === '"') {
+      inString = true
+      continue
+    }
+
+    if (char === '{') {
+      depth += 1
+      continue
+    }
+
+    if (char === '}') {
+      depth -= 1
+      if (depth === 0) {
+        return source.slice(start, i + 1)
+      }
+    }
+  }
+
+  return null
+}
+
+interface InitialPlayerResponse {
+  videoDetails?: {
+    videoId?: string
+    channelId?: string
+    isLiveContent?: boolean
+    isUpcoming?: boolean
+  }
+  playabilityStatus?: {
+    status?: string
+    reason?: string
+    liveStreamability?: unknown
+  }
+  microformat?: {
+    playerMicroformatRenderer?: {
+      liveBroadcastDetails?: {
+        isLiveNow?: boolean
+      }
+    }
+  }
+  streamingData?: {
+    hlsManifestUrl?: string
+  }
+}
+
+const extractInitialPlayerResponse = (html: string): InitialPlayerResponse | null => {
+  const markers = ['var ytInitialPlayerResponse =', 'ytInitialPlayerResponse =']
+
+  for (const marker of markers) {
+    const payload = extractJsonObjectAfter(html, marker)
+    if (!payload) continue
+
+    try {
+      return JSON.parse(payload) as InitialPlayerResponse
+    } catch {
+      // try next marker
+    }
+  }
+
+  return null
+}
 
 export async function GET(request: NextRequest) {
   const channelId = request.nextUrl.searchParams.get('channelId')?.trim() || ''
@@ -95,44 +191,25 @@ export async function GET(request: NextRequest) {
     }
 
     const html = fetched.html
-    if (/consent\.youtube\.com/i.test(html)) {
+    if (isConsentInterstitialHtml(html)) {
       return NextResponse.json({ live: false, uncertain: true })
     }
 
-    const canonical = html.match(/<link[^>]+rel=["']canonical["'][^>]+href=["']([^"']+)["']/i)?.[1]
-    const canonicalVideoId = canonical ? extractVideoId(canonical) : undefined
+    const player = extractInitialPlayerResponse(html)
+    if (player?.videoDetails?.videoId && VIDEO_ID_REGEX.test(player.videoDetails.videoId)) {
+      // Safety check: avoid picking unrelated recommended videos from page blobs.
+      if (player.videoDetails.channelId && player.videoDetails.channelId !== channelId) {
+        return NextResponse.json({ live: false, uncertain: true })
+      }
 
-    const liveMatchA = html.match(/\"videoId\":\"([\w-]{11})\"[\s\S]{0,1200}\"isLiveNow\":true/)
-    if (liveMatchA?.[1] && VIDEO_ID_REGEX.test(liveMatchA[1])) {
-      return NextResponse.json({ live: true, videoId: liveMatchA[1] })
-    }
+      const isLiveNow = player.microformat?.playerMicroformatRenderer?.liveBroadcastDetails?.isLiveNow === true
+      const isLiveContent = player.videoDetails.isLiveContent === true
+      const hasLiveStreamability = Boolean(player.playabilityStatus?.liveStreamability)
+      const hasLiveManifest = Boolean(player.streamingData?.hlsManifestUrl)
+      const isLiveSignal = isLiveNow || isLiveContent || hasLiveStreamability || hasLiveManifest
 
-    const liveMatchB = html.match(/\"isLiveNow\":true[\s\S]{0,1200}\"videoId\":\"([\w-]{11})\"/)
-    if (liveMatchB?.[1] && VIDEO_ID_REGEX.test(liveMatchB[1])) {
-      return NextResponse.json({ live: true, videoId: liveMatchB[1] })
-    }
-
-    const canonicalBase = html.match(/\"canonicalBaseUrl\":\"\\\/watch\\\?v=([\w-]{11})\"/)
-    if (canonicalBase?.[1] && /\"isLiveNow\":true/.test(html)) {
-      return NextResponse.json({ live: true, videoId: canonicalBase[1] })
-    }
-
-    const endpointVideoId = html.match(/\"watchEndpoint\"\\s*:\\s*\\{[^}]*\"videoId\"\\s*:\\s*\"([\w-]{11})\"/)?.[1]
-    if (endpointVideoId && /\"isLiveNow\":true/.test(html)) {
-      return NextResponse.json({ live: true, videoId: endpointVideoId })
-    }
-
-    const liveSignalsPresent =
-      /\"isLiveHeadPlayable\":true/.test(html) ||
-      /\"isLiveDvrEnabled\":true/.test(html) ||
-      /\"isLive\":true/.test(html)
-    if (liveSignalsPresent) {
-      const bestVideoId =
-        endpointVideoId ||
-        extractWatchEndpointVideoId(html) ||
-        canonicalVideoId
-      if (bestVideoId && VIDEO_ID_REGEX.test(bestVideoId)) {
-        return NextResponse.json({ live: true, videoId: bestVideoId })
+      if (isLiveSignal) {
+        return NextResponse.json({ live: true, videoId: player.videoDetails.videoId })
       }
     }
 
