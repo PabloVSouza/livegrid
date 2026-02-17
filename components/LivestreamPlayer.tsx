@@ -11,9 +11,14 @@ interface LivestreamPlayerProps {
 
 export const LivestreamPlayer: FC<LivestreamPlayerProps> = ({ stream, onRemove }) => {
   const { t } = useI18n()
-  const embedUrl = stream.videoId
-    ? `https://www.youtube.com/embed/${stream.videoId}?autoplay=1&controls=1&mute=1`
-    : null
+  const isChannelFallback =
+    typeof stream.videoId === 'string' && stream.videoId.startsWith('live_channel:')
+  const fallbackChannelId = isChannelFallback ? stream.videoId!.slice('live_channel:'.length) : null
+  const embedUrl = isChannelFallback
+    ? `https://www.youtube.com/embed/live_stream?channel=${fallbackChannelId}&autoplay=1&controls=1&mute=1`
+    : stream.videoId
+      ? `https://www.youtube.com/embed/${stream.videoId}?autoplay=1&controls=1&mute=1`
+      : null
 
   return (
     <div className="flex flex-col h-full bg-black overflow-hidden border-r border-b border-gray-800">

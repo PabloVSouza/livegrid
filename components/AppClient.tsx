@@ -27,6 +27,12 @@ interface LiveGridProject {
   createdAt: string
 }
 
+const CHANNEL_LIVE_FALLBACK_PREFIX = 'live_channel:'
+const toChannelLiveFallbackVideoId = (channelId: string): string =>
+  `${CHANNEL_LIVE_FALLBACK_PREFIX}${channelId}`
+const isChannelLiveFallbackVideoId = (videoId?: string): boolean =>
+  typeof videoId === 'string' && videoId.startsWith(CHANNEL_LIVE_FALLBACK_PREFIX)
+
 interface StoredProject {
   id: string
   name: string
@@ -186,17 +192,25 @@ function AppClientContent() {
     return { channelId: data.channelId, title: data.title }
   }
 
-  const fetchCurrentLiveVideoId = async (channelId: string): Promise<string | undefined> => {
+  const fetchCurrentLiveVideoId = async (channelId: string): Promise<string | undefined | null> => {
     try {
       const response = await fetch(`/api/channel-live?channelId=${encodeURIComponent(channelId)}`)
-      const data = (await response.json()) as { live?: boolean; videoId?: string; error?: string }
+      const data = (await response.json()) as {
+        live?: boolean
+        uncertain?: boolean
+        videoId?: string
+        error?: string
+      }
       if (!response.ok) {
         throw new Error(data.error || 'Failed to check channel live status')
       }
+      if (data.uncertain) {
+        return null
+      }
       return data.live ? data.videoId : undefined
     } catch (error) {
-      console.error('Live status check failed:', channelId, error)
-      return undefined
+      console.warn('Live status check inconclusive:', channelId, error)
+      return null
     }
   }
 
@@ -210,7 +224,10 @@ function AppClientContent() {
       channelUrl,
       channelId: resolved.channelId,
       title: resolvedTitle,
-      videoId: liveVideoId
+      videoId:
+        liveVideoId === null
+          ? toChannelLiveFallbackVideoId(resolved.channelId)
+          : liveVideoId ?? undefined
     }
   }
 
@@ -272,6 +289,13 @@ function AppClientContent() {
           }
 
           const liveVideoId = await fetchCurrentLiveVideoId(stream.channelId)
+          if (liveVideoId === null) {
+            // If backend detection is blocked (consent/rate-limited), use channel live embed fallback.
+            if (!stream.videoId || !isChannelLiveFallbackVideoId(stream.videoId)) {
+              return { ...stream, videoId: toChannelLiveFallbackVideoId(stream.channelId) }
+            }
+            return stream
+          }
           return { ...stream, videoId: liveVideoId }
         })
       )

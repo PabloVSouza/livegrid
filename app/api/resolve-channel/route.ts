@@ -1,6 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
 
 const CHANNEL_ID_REGEX = /UC[\w-]{22}/
+const CONSENT_HOST = 'consent.youtube.com'
+
+export const runtime = 'nodejs'
+export const preferredRegion = ['iad1']
+export const dynamic = 'force-dynamic'
+
+const REQUEST_HEADERS: HeadersInit = {
+  'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+  'accept-language': 'en-US,en;q=0.9',
+  cookie: 'CONSENT=YES+cb.20210328-17-p0.en+FX+917'
+}
 
 const decodeHtml = (value: string): string =>
   value
@@ -92,20 +103,44 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const response = await fetch(normalized.toString(), {
-      headers: {
-        'user-agent':
-          'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
-      },
+    let response = await fetch(normalized.toString(), {
+      headers: REQUEST_HEADERS,
       redirect: 'follow',
       cache: 'no-store'
     })
+
+    const redirectedHost = (() => {
+      try {
+        return new URL(response.url).hostname
+      } catch {
+        return ''
+      }
+    })()
+    if (redirectedHost.includes(CONSENT_HOST)) {
+      try {
+        const consentUrl = new URL(response.url)
+        const continueUrl = consentUrl.searchParams.get('continue')
+        if (continueUrl) {
+          const decodedContinue = decodeURIComponent(continueUrl)
+          response = await fetch(decodedContinue, {
+            headers: REQUEST_HEADERS,
+            redirect: 'follow',
+            cache: 'no-store'
+          })
+        }
+      } catch {
+        return NextResponse.json({ error: 'Could not resolve channel (consent gate)' }, { status: 502 })
+      }
+    }
 
     if (!response.ok) {
       return NextResponse.json({ error: `Failed to fetch channel page (${response.status})` }, { status: 502 })
     }
 
     const html = await response.text()
+    if (/consent\.youtube\.com/i.test(html)) {
+      return NextResponse.json({ error: 'Could not resolve channel (consent gate)' }, { status: 502 })
+    }
     const channelId = extractChannelId(html)
 
     if (!channelId || !CHANNEL_ID_REGEX.test(channelId)) {
