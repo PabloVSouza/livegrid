@@ -130,40 +130,56 @@ export async function GET(request: NextRequest) {
       `Markers - isLiveNow: ${hasLiveNow}, isLiveContent: ${hasLiveContent}, isUpcoming: ${hasUpcoming}, isLive: ${hasIsLive}, status: ${hasStatus}`
     )
 
-    // STRICT: Only accept isLiveNow=true as definitive proof of active livestream
-    // Other markers (isLiveContent, isLive, status) appear on non-streaming content too
-    const isLive = hasLiveNow
+    // Detection logic:
+    // - isLiveNow=true: Definitely actively streaming RIGHT NOW
+    // - isLiveContent=true AND isUpcoming=false: Stream is live or about to start (not scheduled for future)
+    // DO NOT use: isLiveContent=true alone (includes scheduled streams far in future)
+    const isLive = hasLiveNow || (hasLiveContent && !hasUpcoming)
 
     if (isLive) {
-      addLog(`Live stream (isLiveNow=true) detected! Extracting video ID...`)
+      addLog(`Live stream detected! Extracting video ID...`)
 
       // Find the video ID associated with THIS livestream
       let videoId: string | undefined
+      let detectionMethod = 'unknown'
 
+      // Try isLiveNow marker first (most reliable)
       if (liveNowMatch) {
-        // Search around the isLiveNow marker for the videoId
         const liveIndex = html.indexOf(liveNowMatch[0])
         const context = html.substring(Math.max(0, liveIndex - 2000), liveIndex + 500)
         const vidMatch = context.match(/"videoId"\s*:\s*"([a-zA-Z0-9_-]{11})"/)
         if (vidMatch?.[1]) {
           videoId = vidMatch[1]
+          detectionMethod = 'isLiveNow'
           addLog(`Found videoId near isLiveNow: ${videoId}`)
         }
       }
 
+      // Fallback to isLiveContent (if not upcoming) if isLiveNow didn't work
+      if (!videoId && liveContentMatch && !hasUpcoming) {
+        const liveIndex = html.indexOf(liveContentMatch[0])
+        const context = html.substring(Math.max(0, liveIndex - 2000), liveIndex + 500)
+        const vidMatch = context.match(/"videoId"\s*:\s*"([a-zA-Z0-9_-]{11})"/)
+        if (vidMatch?.[1]) {
+          videoId = vidMatch[1]
+          detectionMethod = 'isLiveContent'
+          addLog(`Found videoId near isLiveContent: ${videoId}`)
+        }
+      }
+
       if (videoId) {
-        addLog(`✅ LIVE DETECTED! Video ID: ${videoId}`)
+        addLog(`✅ LIVE DETECTED via ${detectionMethod}! Video ID: ${videoId}`)
         return NextResponse.json(
           {
             live: true,
             videoId,
-            method: 'isLiveNow',
+            method: detectionMethod,
             debug: debug ? log : undefined
           },
           { status: 200 }
         )
       } else {
-        addLog(`isLiveNow=true found but could not extract videoId`)
+        addLog(`Live markers found but could not extract videoId`)
       }
     }
 
