@@ -22,7 +22,7 @@ export const LivestreamPlayer: FC<LivestreamPlayerProps> = ({ stream, onRemove }
         style={{ touchAction: 'none' }}
       >
         <div className="flex items-center gap-2 min-w-0 flex-1">
-          <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse flex-shrink-0" />
+          <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse shrink-0" />
           <div className="flex-1 min-w-0">
             <h3 className="text-sm font-semibold truncate text-gray-100 inline-block max-w-full">
               {stream.title}
@@ -31,7 +31,7 @@ export const LivestreamPlayer: FC<LivestreamPlayerProps> = ({ stream, onRemove }
         </div>
         <button
           onClick={onRemove}
-          className="ml-1 p-1 hover:bg-gray-700 transition text-gray-400 hover:text-red-400 flex-shrink-0"
+          className="ml-1 p-1 hover:bg-gray-700 transition text-gray-400 hover:text-red-400 shrink-0"
           title={t('player.remove')}
           aria-label={t('player.remove')}
         >

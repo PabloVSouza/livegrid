@@ -32,6 +32,7 @@ const isConsentPage = (html: string): boolean => {
 export async function GET(request: NextRequest) {
   const channelId = request.nextUrl.searchParams.get('channelId')?.trim() || ''
   const debug = request.nextUrl.searchParams.get('debug') === 'true'
+  const diagnose = request.nextUrl.searchParams.get('diagnose') === 'true'
 
   if (!/^UC[\w-]{22}$/.test(channelId)) {
     return NextResponse.json({ error: 'Invalid channelId format' }, { status: 400 })
@@ -46,8 +47,6 @@ export async function GET(request: NextRequest) {
   try {
     addLog(`Checking channel: ${channelId}`)
 
-    // The key insight: YouTube auto-redirects /channel/UCxxx/live to /watch?v=xxx when there's a live stream
-    // This is how OBS and other tools detect livestreams
     const liveUrl = `https://www.youtube.com/channel/${channelId}/live`
     addLog(`Fetching: ${liveUrl}`)
 
@@ -80,12 +79,11 @@ export async function GET(request: NextRequest) {
     }
 
     // Primary detection method: URL redirect
-    // If URL contains /watch?v=, YouTube redirected us there, meaning there's a live stream
     if (finalUrl.includes('/watch?v=')) {
       const videoIdMatch = finalUrl.match(/[?&]v=([a-zA-Z0-9_-]{11})/)
       if (videoIdMatch?.[1]) {
         const videoId = videoIdMatch[1]
-        addLog(`✅ LIVE DETECTED! Video ID: ${videoId}`)
+        addLog(`✅ LIVE DETECTED via URL redirect! Video ID: ${videoId}`)
         return NextResponse.json(
           {
             live: true,
@@ -98,8 +96,73 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // No redirect to /watch means no active livestream
-    addLog(`No live stream detected (URL did not redirect to /watch)`)
+    // YouTube now serves the page without redirect - search HTML for video data
+    addLog(`No URL redirect. Searching HTML for video data...`)
+    
+    // Search for "videoId" with value pattern
+    const videoIdMatches = html.match(/"videoId"\s*:\s*"([a-zA-Z0-9_-]{11})"/g)
+    if (videoIdMatches) {
+      addLog(`Found ${videoIdMatches.length} video IDs in HTML`)
+    }
+    
+    // Search for live specific markers
+    const hasIsLiveContent = html.includes('"isLiveContent":true')
+    const hasIsLiveNow = html.includes('"isLiveNow":true')
+    const hasLiveStreamability = html.includes('"liveStreamability"')
+    
+    addLog(`"isLiveContent":true found: ${hasIsLiveContent}`)
+    addLog(`"isLiveNow":true found: ${hasIsLiveNow}`)
+    addLog(`"liveStreamability" found: ${hasLiveStreamability}`)
+
+    // If we find a live marker, extract the first video ID
+    if (hasIsLiveContent || hasIsLiveNow || hasLiveStreamability) {
+      // Find the video ID associated with the live content
+      // Search backwards from the live marker to find the videoId
+      const liveIndex = Math.max(
+        html.lastIndexOf('"isLiveContent":true'),
+        html.lastIndexOf('"isLiveNow":true'),
+        html.lastIndexOf('"liveStreamability"')
+      )
+      
+      if (liveIndex > 0) {
+        // Look for videoId in the ~500 chars before the live marker
+        const contextBefore = html.substring(Math.max(0, liveIndex - 2000), liveIndex)
+        const vidMatch = contextBefore.match(/"videoId"\s*:\s*"([a-zA-Z0-9_-]{11})"/)
+        
+        if (vidMatch?.[1]) {
+          const videoId = vidMatch[1]
+          addLog(`✅ LIVE DETECTED via HTML markers! Video ID: ${videoId}`)
+          return NextResponse.json(
+            {
+              live: true,
+              videoId,
+              method: 'html-markers',
+              debug: debug ? log : undefined
+            },
+            { status: 200 }
+          )
+        }
+      }
+    }
+
+    // Diagnostic mode: show HTML snippet for analysis
+    if (diagnose === true) {
+      const snippet = html.substring(0, 3000)
+      addLog(`Diagnostic mode - showing first 3000 chars of HTML`)
+      return NextResponse.json(
+        {
+          live: false,
+          debug: log,
+          htmlSnippet: snippet,
+          htmlSize: html.length,
+          message: 'Diagnostic mode activated - see htmlSnippet for analysis'
+        },
+        { status: 200 }
+      )
+    }
+
+    // No livestream detected
+    addLog(`No active livestream found`)
     return NextResponse.json(
       {
         live: false,
