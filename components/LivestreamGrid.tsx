@@ -33,6 +33,7 @@ interface GridMetrics {
 }
 
 const TARGET_ASPECT = 16 / 9
+const STREAM_HEADER_HEIGHT_PX = 24
 const TARGET_ROW_PX = 180
 
 const loadStoredManualLayout = (storageKey: string): LayoutItem[] | null => {
@@ -87,16 +88,17 @@ const computeGridMetrics = (width: number, height: number, itemCount: number): G
 
   if (isMobile) {
     const rowHeight = TARGET_ROW_PX
-    const cellWidth = rowHeight * TARGET_ASPECT
+    const contentHeight = Math.max(1, rowHeight - STREAM_HEADER_HEIGHT_PX)
+    const cellWidth = contentHeight * TARGET_ASPECT
     const cols = Math.max(1, Math.floor(safeWidth / cellWidth))
     const rows = Math.max(1, Math.ceil(Math.max(1, itemCount) / cols))
-    const contentHeight = rows * rowHeight
+    const contentHeightPx = rows * rowHeight
 
     return {
       width: safeWidth,
       layoutWidth: safeWidth,
       height: safeHeight,
-      contentHeight,
+      contentHeight: contentHeightPx,
       cols,
       rows,
       rowHeight,
@@ -107,7 +109,8 @@ const computeGridMetrics = (width: number, height: number, itemCount: number): G
   const maxRowsByMinHeight = Math.max(1, Math.floor(safeHeight / TARGET_ROW_PX))
   const rows = maxRowsByMinHeight
   const rowHeight = safeHeight / rows
-  const cellWidth = rowHeight * TARGET_ASPECT
+  const contentHeight = Math.max(1, rowHeight - STREAM_HEADER_HEIGHT_PX)
+  const cellWidth = contentHeight * TARGET_ASPECT
   const cols = Math.max(1, Math.round(safeWidth / cellWidth))
 
   // Use full container width so every visible column is usable.

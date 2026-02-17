@@ -10,6 +10,13 @@ body {
   height: 100%;
   margin: 0;
   padding: 0;
+  background: #000;
+  color-scheme: dark;
+}
+
+body {
+  min-height: 100dvh;
+  overscroll-behavior: none;
 }
 
 * {

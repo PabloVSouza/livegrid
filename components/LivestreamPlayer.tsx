@@ -18,13 +18,13 @@ export const LivestreamPlayer: FC<LivestreamPlayerProps> = ({ stream, onRemove }
   return (
     <div className="flex flex-col h-full bg-black overflow-hidden border-r border-b border-gray-800">
       <div
-        className="drag-handle flex items-center justify-between bg-gray-900 px-2 py-1 border-b border-gray-800 cursor-move select-none"
+        className="drag-handle h-6 flex items-center justify-between bg-gray-900 px-2 border-b border-gray-800 cursor-move select-none"
         style={{ touchAction: 'none' }}
       >
         <div className="flex items-center gap-2 min-w-0 flex-1">
           <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse shrink-0" />
           <div className="flex-1 min-w-0">
-            <h3 className="text-sm font-semibold truncate text-gray-100 inline-block max-w-full">
+            <h3 className="text-xs font-semibold truncate text-gray-100 inline-block max-w-full leading-none">
               {stream.title}
             </h3>
           </div>
