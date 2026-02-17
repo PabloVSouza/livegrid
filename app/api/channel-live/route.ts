@@ -117,42 +117,25 @@ export async function GET(request: NextRequest) {
     const liveNowMatch = html.match(/"isLiveNow"\s*:\s*true/)
     const liveContentMatch = html.match(/"isLiveContent"\s*:\s*true/)
     const upcomingMatch = html.match(/"isUpcoming"\s*:\s*true/)
-    const liveStreamabilityMatch = html.match(/"liveStreamability"/)
-
-    // Also search for alternative markers
-    const videoBadgeMatch = html.match(/"videoBadgeRenderer"/)
-    const liveChipMatch = html.match(/"liveChip"/)
     const isLiveMatch = html.match(/"isLive"\s*:\s*true/)
     const statusMatch = html.match(/"status"\s*:\s*"LIVE"/)
 
     const hasLiveNow = !!liveNowMatch
     const hasLiveContent = !!liveContentMatch
     const hasUpcoming = !!upcomingMatch
-    const hasLiveStreamability = !!liveStreamabilityMatch
-    const hasVideoBadge = !!videoBadgeMatch
-    const hasLiveChip = !!liveChipMatch
     const hasIsLive = !!isLiveMatch
     const hasStatus = !!statusMatch
 
     addLog(
-      `Markers - isLiveNow: ${hasLiveNow}, isLiveContent: ${hasLiveContent}, isUpcoming: ${hasUpcoming}`
+      `Markers - isLiveNow: ${hasLiveNow}, isLiveContent: ${hasLiveContent}, isUpcoming: ${hasUpcoming}, isLive: ${hasIsLive}, status: ${hasStatus}`
     )
-    addLog(`Markers - liveStreamability: ${hasLiveStreamability}, videoBadge: ${hasVideoBadge}`)
-    addLog(`Markers - liveChip: ${hasLiveChip}, isLive: ${hasIsLive}, status: ${hasStatus}`)
 
-    // Logic:
-    // - If isLiveNow=true, it's actively live
-    // - If isLiveContent=true AND isUpcoming=false, it's live or was recently live
-    // - If liveStreamability exists, the stream has/had live capability
-    // - Alternative markers: status="LIVE", isLive=true, videoBadge, liveChip
-    const isLive =
-      hasLiveNow ||
-      hasIsLive ||
-      hasStatus ||
-      hasVideoBadge ||
-      hasLiveChip ||
-      hasLiveStreamability ||
-      (hasLiveContent && !hasUpcoming)
+    // Logic - use ONLY the most reliable livestream markers:
+    // - isLiveNow=true: Currently streaming (most reliable)
+    // - isLive=true: Alternative livestream flag
+    // - status="LIVE": YouTube status field
+    // - isLiveContent=true AND isUpcoming=false: Live but not scheduled for future
+    const isLive = hasLiveNow || hasIsLive || hasStatus || (hasLiveContent && !hasUpcoming)
 
     if (isLive) {
       addLog(`Live stream detected! Looking for video ID...`)
@@ -165,8 +148,7 @@ export async function GET(request: NextRequest) {
         liveNowMatch,
         isLiveMatch,
         statusMatch,
-        liveContentMatch,
-        liveStreamabilityMatch
+        liveContentMatch
       ].filter(Boolean)
 
       for (const marker of markers) {
