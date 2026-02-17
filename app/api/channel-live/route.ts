@@ -11,7 +11,7 @@ const REQUEST_HEADERS: HeadersInit = {
   'user-agent':
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
   'accept-language': 'en-US,en;q=0.9',
-  'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+  accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
   'sec-fetch-dest': 'document',
   'sec-fetch-mode': 'navigate',
   'sec-fetch-site': 'none',
@@ -176,7 +176,7 @@ export async function GET(request: NextRequest) {
         return ''
       }
     })()
-    
+
     if (redirectedHost.includes(CONSENT_HOST)) {
       try {
         const consentUrl = new URL(fetched.responseUrl)
