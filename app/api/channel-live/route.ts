@@ -8,7 +8,8 @@ export const preferredRegion = ['iad1']
 export const dynamic = 'force-dynamic'
 
 const REQUEST_HEADERS: HeadersInit = {
-  'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+  'user-agent':
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
   'accept-language': 'en-US,en;q=0.9',
   cookie: 'CONSENT=YES+cb.20210328-17-p0.en+FX+917'
 }
@@ -22,7 +23,9 @@ const isConsentInterstitialHtml = (html: string): boolean => {
   )
 }
 
-const fetchHtml = async (url: string): Promise<{ responseUrl: string; html: string; status: number }> => {
+const fetchHtml = async (
+  url: string
+): Promise<{ responseUrl: string; html: string; status: number }> => {
   const response = await fetch(url, {
     redirect: 'follow',
     cache: 'no-store',
@@ -202,12 +205,13 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ live: false, uncertain: true })
       }
 
-      const isLiveNow = player.microformat?.playerMicroformatRenderer?.liveBroadcastDetails?.isLiveNow === true
+      const isLiveNow =
+        player.microformat?.playerMicroformatRenderer?.liveBroadcastDetails?.isLiveNow === true
       const isLiveContent = player.videoDetails.isLiveContent === true
       const isUpcoming = player.videoDetails.isUpcoming === true
       const hasLiveStreamability = Boolean(player.playabilityStatus?.liveStreamability)
       const hasLiveManifest = Boolean(player.streamingData?.hlsManifestUrl)
-      
+
       // isLiveContent is true for both upcoming AND currently-live streams
       // We need to exclude upcoming streams to avoid false positives
       const isActuallyLive = isLiveContent && !isUpcoming
