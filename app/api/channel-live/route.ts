@@ -4,222 +4,120 @@ export const runtime = 'nodejs'
 export const preferredRegion = ['iad1']
 export const dynamic = 'force-dynamic'
 
+const CHANNEL_ID_REGEX = /^UC[\w-]{22}$/
+
 const REQUEST_HEADERS: HeadersInit = {
   'user-agent':
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
   'accept-language': 'en-US,en;q=0.9',
-  'accept-encoding': 'gzip, deflate, br',
-  accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-  'sec-fetch-dest': 'document',
-  'sec-fetch-mode': 'navigate',
-  'sec-fetch-site': 'none',
-  'sec-fetch-user': '?1',
-  'cache-control': 'max-age=0',
-  'upgrade-insecure-requests': '1',
-  referer: 'https://www.youtube.com/',
-  cookie: 'CONSENT=YES+1; PREF=tz=America.Los_Angeles&f7=4000'
+  cookie: 'CONSENT=YES+1'
 }
 
-const isConsentPage = (html: string): boolean => {
-  const head = html.slice(0, 8000)
+const isConsentInterstitial = (html: string): boolean => {
+  const head = html.slice(0, 12000)
+  return /Before you continue to YouTube/i.test(head) || /introAgreeButton/i.test(head)
+}
+
+const extractMainLiveVideoId = (html: string): string | undefined => {
+  // Use the page command for /channel/.../live target to avoid picking random videoIds from huge blobs.
+  return html.match(
+    /window\['ytCommand'\]\s*=\s*\{[\s\S]*?"watchEndpoint"\s*:\s*\{\s*"videoId"\s*:\s*"([\w-]{11})"[\s\S]*?\};/
+  )?.[1]
+}
+
+const hasLiveSignals = (html: string): boolean => {
   return (
-    /Before you continue to YouTube/i.test(head) ||
-    /consent\.youtube\.com/i.test(head) ||
-    /introAgreeButton/i.test(head)
+    /"isLiveNow"\s*:\s*true/.test(html) ||
+    /"isLiveHeadPlayable"\s*:\s*true/.test(html) ||
+    /"isLiveDvrEnabled"\s*:\s*true/.test(html) ||
+    /"isLive"\s*:\s*true/.test(html)
   )
 }
 
 export async function GET(request: NextRequest) {
   const channelId = request.nextUrl.searchParams.get('channelId')?.trim() || ''
   const debug = request.nextUrl.searchParams.get('debug') === 'true'
-  const diagnose = request.nextUrl.searchParams.get('diagnose') === 'true'
 
-  if (!/^UC[\w-]{22}$/.test(channelId)) {
+  if (!CHANNEL_ID_REGEX.test(channelId)) {
     return NextResponse.json({ error: 'Invalid channelId format' }, { status: 400 })
   }
 
-  const log: string[] = []
-  const addLog = (msg: string) => {
-    if (debug) log.push(msg)
-    console.log(`[channel-live] ${msg}`)
+  const logs: string[] = []
+  const log = (message: string) => {
+    if (debug) logs.push(message)
   }
 
   try {
-    addLog(`Checking channel: ${channelId}`)
-
     const liveUrl = `https://www.youtube.com/channel/${channelId}/live`
-    addLog(`Fetching: ${liveUrl}`)
-
     const response = await fetch(liveUrl, {
       redirect: 'follow',
       cache: 'no-store',
       headers: REQUEST_HEADERS
     })
 
-    const html = await response.text()
     const finalUrl = response.url
+    const html = await response.text()
 
-    addLog(`Status: ${response.status}`)
-    addLog(`Final URL: ${finalUrl}`)
-    addLog(`Content length: ${html.length} bytes`)
+    log(`status=${response.status}`)
+    log(`url=${finalUrl}`)
+    log(`htmlLen=${html.length}`)
 
-    // Check for consent wall
-    if (isConsentPage(html)) {
-      addLog(`⚠️  Consent page detected - YouTube is blocking access`)
+    const finalHost = (() => {
+      try {
+        return new URL(finalUrl).hostname
+      } catch {
+        return ''
+      }
+    })()
+
+    if (finalHost.includes('consent.youtube.com') || isConsentInterstitial(html)) {
+      log('consent=1')
       return NextResponse.json(
         {
           live: false,
           uncertain: true,
           consentRequired: true,
-          message: 'YouTube requires consent - cannot check livestream status',
-          debug: debug ? log : undefined
+          message: 'YouTube consent gate',
+          debug: debug ? logs : undefined
         },
         { status: 200 }
       )
     }
 
-    // Primary detection method: URL redirect
-    if (finalUrl.includes('/watch?v=')) {
-      const videoIdMatch = finalUrl.match(/[?&]v=([a-zA-Z0-9_-]{11})/)
-      if (videoIdMatch?.[1]) {
-        const videoId = videoIdMatch[1]
-        addLog(`✅ LIVE DETECTED via URL redirect! Video ID: ${videoId}`)
-        return NextResponse.json(
-          {
-            live: true,
-            videoId,
-            method: 'url-redirect',
-            debug: debug ? log : undefined
-          },
-          { status: 200 }
-        )
-      }
-    }
+    const videoId = extractMainLiveVideoId(html)
+    const live = hasLiveSignals(html)
 
-    // YouTube now serves the page without redirect - search HTML for video data
-    addLog(`No URL redirect. Searching HTML for video data...`)
+    log(`videoId=${videoId ?? 'none'}`)
+    log(`liveSignals=${live ? '1' : '0'}`)
 
-    // Search for "videoId" with value pattern
-    const videoIdMatches = html.match(/"videoId"\s*:\s*"([a-zA-Z0-9_-]{11})"/g)
-    if (videoIdMatches) {
-      addLog(`Found ${videoIdMatches.length} videoId entries in HTML`)
-    }
-
-    // Extract the first videoId for fallback
-    let firstVideoId: string | undefined
-    const firstVidMatch = html.match(/"videoId"\s*:\s*"([a-zA-Z0-9_-]{11})"/)
-    if (firstVidMatch?.[1]) {
-      firstVideoId = firstVidMatch[1]
-      addLog(`First videoId found: ${firstVideoId}`)
-    }
-
-    // Search for live specific markers using regex (with flexible spacing)
-    const liveNowMatch = html.match(/"isLiveNow"\s*:\s*true/)
-    const liveContentMatch = html.match(/"isLiveContent"\s*:\s*true/)
-    const upcomingMatch = html.match(/"isUpcoming"\s*:\s*true/)
-    const isLiveMatch = html.match(/"isLive"\s*:\s*true/)
-    const statusMatch = html.match(/"status"\s*:\s*"LIVE"/)
-
-    const hasLiveNow = !!liveNowMatch
-    const hasLiveContent = !!liveContentMatch
-    const hasUpcoming = !!upcomingMatch
-    const hasIsLive = !!isLiveMatch
-    const hasStatus = !!statusMatch
-
-    addLog(
-      `Markers - isLiveNow: ${hasLiveNow}, isLiveContent: ${hasLiveContent}, isUpcoming: ${hasUpcoming}, isLive: ${hasIsLive}, status: ${hasStatus}`
-    )
-
-    // Detection logic:
-    // - isLiveNow=true: Definitely actively streaming RIGHT NOW
-    // - isLiveContent=true AND isUpcoming=false: Stream is live or about to start (not scheduled for future)
-    // DO NOT use: isLiveContent=true alone (includes scheduled streams far in future)
-    const isLive = hasLiveNow || (hasLiveContent && !hasUpcoming)
-
-    if (isLive) {
-      addLog(`Live stream detected! Extracting video ID...`)
-
-      // Find the video ID associated with THIS livestream
-      let videoId: string | undefined
-      let detectionMethod = 'unknown'
-
-      // Try isLiveNow marker first (most reliable)
-      if (liveNowMatch) {
-        const liveIndex = html.indexOf(liveNowMatch[0])
-        const context = html.substring(Math.max(0, liveIndex - 2000), liveIndex + 500)
-        const vidMatch = context.match(/"videoId"\s*:\s*"([a-zA-Z0-9_-]{11})"/)
-        if (vidMatch?.[1]) {
-          videoId = vidMatch[1]
-          detectionMethod = 'isLiveNow'
-          addLog(`Found videoId near isLiveNow: ${videoId}`)
-        }
-      }
-
-      // Fallback to isLiveContent (if not upcoming) if isLiveNow didn't work
-      if (!videoId && liveContentMatch && !hasUpcoming) {
-        const liveIndex = html.indexOf(liveContentMatch[0])
-        const context = html.substring(Math.max(0, liveIndex - 2000), liveIndex + 500)
-        const vidMatch = context.match(/"videoId"\s*:\s*"([a-zA-Z0-9_-]{11})"/)
-        if (vidMatch?.[1]) {
-          videoId = vidMatch[1]
-          detectionMethod = 'isLiveContent'
-          addLog(`Found videoId near isLiveContent: ${videoId}`)
-        }
-      }
-
-      if (videoId) {
-        addLog(`✅ LIVE DETECTED via ${detectionMethod}! Video ID: ${videoId}`)
-        return NextResponse.json(
-          {
-            live: true,
-            videoId,
-            method: detectionMethod,
-            debug: debug ? log : undefined
-          },
-          { status: 200 }
-        )
-      } else {
-        addLog(`Live markers found but could not extract videoId`)
-      }
-    }
-
-    // Diagnostic mode: show HTML snippet for analysis
-    if (diagnose === true) {
-      const snippet = html.substring(0, 15000)
-      addLog(`Diagnostic mode - showing first 15000 chars of HTML`)
+    if (live && videoId) {
       return NextResponse.json(
         {
-          live: false,
-          debug: log,
-          htmlSnippet: snippet,
-          htmlSize: html.length,
-          message: 'Diagnostic mode activated - see htmlSnippet for analysis'
+          live: true,
+          videoId,
+          method: 'ytCommand+liveSignals',
+          debug: debug ? logs : undefined
         },
         { status: 200 }
       )
     }
 
-    // No livestream detected
-    addLog(`No active livestream found`)
     return NextResponse.json(
       {
         live: false,
-        message: 'No active livestream',
-        debug: debug ? log : undefined
+        debug: debug ? logs : undefined
       },
       { status: 200 }
     )
   } catch (error) {
-    const errorMsg = error instanceof Error ? error.message : String(error)
-    addLog(`ERROR: ${errorMsg}`)
-    console.error('[channel-live] Error checking channel:', error)
+    const message = error instanceof Error ? error.message : String(error)
 
     return NextResponse.json(
       {
         live: false,
         uncertain: true,
-        error: errorMsg,
-        debug: debug ? log : undefined
+        error: message,
+        debug: debug ? [...logs, `error=${message}`] : undefined
       },
       { status: 200 }
     )
