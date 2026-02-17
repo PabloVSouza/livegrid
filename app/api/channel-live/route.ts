@@ -145,7 +145,14 @@ interface InitialPlayerResponse {
 }
 
 const extractInitialPlayerResponse = (html: string): InitialPlayerResponse | null => {
-  const markers = ['var ytInitialPlayerResponse =', 'ytInitialPlayerResponse =']
+  // Try multiple marker patterns as YouTube may change variable names
+  const markers = [
+    'var ytInitialPlayerResponse =',
+    'ytInitialPlayerResponse =',
+    'ytInitialPlayerResponse=',
+    'var ytInitialPlayerResponse=',
+    '"playerOverlayRenderer":{"autoplay":1}' // alternative marker showing live indicator
+  ]
 
   for (const marker of markers) {
     const payload = extractJsonObjectAfter(html, marker)
@@ -153,36 +160,123 @@ const extractInitialPlayerResponse = (html: string): InitialPlayerResponse | nul
 
     try {
       return JSON.parse(payload) as InitialPlayerResponse
-    } catch {
-      // try next marker
+    } catch (e) {
+      // If it's the last marker, it might not be JSON
+      continue
     }
   }
 
   return null
 }
 
+const extractLiveStatusFromInitialData = (html: string): { isLive: boolean; videoId?: string } => {
+  // Try to extract from ytInitialData which might have different structure
+  const markers = ['var ytInitialData =', 'ytInitialData =', 'ytInitialData=', 'var ytInitialData=']
+
+  for (const marker of markers) {
+    const payload = extractJsonObjectAfter(html, marker)
+    if (!payload) continue
+
+    try {
+      const data = JSON.parse(payload) as any
+
+      // Look for live status in various locations
+      if (data.contents?.twoColumnBrowseResultsRenderer?.tabs) {
+        const tabs = data.contents.twoColumnBrowseResultsRenderer.tabs
+        for (const tab of tabs) {
+          // Check for videos tab which contains live streams
+          const videoList =
+            tab.tabRenderer?.content?.richGridRenderer?.contents ||
+            tab.tabRenderer?.content?.sectionListRenderer?.contents ||
+            []
+
+          for (const item of videoList) {
+            const videoId =
+              item.richItemRenderer?.content?.videoRenderer?.videoId ||
+              item.gridVideoRenderer?.videoId
+            if (videoId) {
+              // Check if this video has live indicators
+              const badges =
+                item.richItemRenderer?.content?.videoRenderer?.badges ||
+                item.gridVideoRenderer?.badges ||
+                []
+              const isLive = badges.some(
+                (b: any) =>
+                  b.metadataBadgeRenderer?.label === 'LIVE' ||
+                  b.metadataBadgeRenderer?.label === 'Ao vivo' ||
+                  /live|transmit/i.test(b.metadataBadgeRenderer?.label || '')
+              )
+
+              if (isLive) {
+                return { isLive: true, videoId }
+              }
+            }
+          }
+        }
+      }
+    } catch {
+      // continue
+    }
+  }
+
+  return { isLive: false }
+}
+
 const extractLiveIndicatorsFromHtml = (html: string): { isLive: boolean; videoId?: string } => {
   // Check for live content indicators in various places
 
-  // 1. Check for "isLiveContent":true in the HTML
-  const isLiveContentMatch = html.match(/"isLiveContent":\s*true/)
+  // 1. Check for "isLiveContent":true in the HTML (could have different spacing)
+  const isLiveContentMatch = html.match(/"isLiveContent"\s*:\s*true/)
   if (isLiveContentMatch) {
-    // Extract video ID if possible
-    const videoIdMatch = html.match(/"videoId":"([\w-]{11})"/)
-    return { isLive: true, videoId: videoIdMatch?.[1] }
+    // Extract video ID if possible - try multiple patterns
+    let videoIdMatch = html.match(/"videoId"\s*:\s*"([\w-]{11})"/)
+    if (!videoIdMatch) {
+      videoIdMatch = html.match(/"videoId":"([\w-]{11})"/)
+    }
+    // If we found isLiveContent:true but not upcoming, assume it's live
+    const isUpcomingMatch = html.match(/"isUpcoming"\s*:\s*true/)
+    if (!isUpcomingMatch) {
+      return { isLive: true, videoId: videoIdMatch?.[1] }
+    }
   }
 
-  // 2. Check for live manifest or streaming indicators
-  const hasLiveManifest = /hlsManifestUrl|dashManifestUrl/.test(html)
+  // 2. Check for live manifest or streaming indicators (these only appear when streaming)
+  const hasLiveManifest = /hlsManifestUrl|dashManifestUrl|"streamingData"/.test(html)
   if (hasLiveManifest) {
-    const videoIdMatch = html.match(/"videoId":"([\w-]{11})"/)
+    let videoIdMatch = html.match(/"videoId"\s*:\s*"([\w-]{11})"/)
+    if (!videoIdMatch) {
+      videoIdMatch = html.match(/"videoId":"([\w-]{11})"/)
+    }
     return { isLive: true, videoId: videoIdMatch?.[1] }
   }
 
-  // 3. Check for "isUpcoming":true to filter out scheduled streams
-  const isUpcomingMatch = html.match(/"isUpcoming":\s*true/)
-  if (isUpcomingMatch) {
-    return { isLive: false }
+  // 3. Check for isLiveNow indicator
+  const isLiveNowMatch = html.match(/"isLiveNow"\s*:\s*true/)
+  if (isLiveNowMatch) {
+    let videoIdMatch = html.match(/"videoId"\s*:\s*"([\w-]{11})"/)
+    if (!videoIdMatch) {
+      videoIdMatch = html.match(/"videoId":"([\w-]{11})"/)
+    }
+    return { isLive: true, videoId: videoIdMatch?.[1] }
+  }
+
+  // 4. Check for playabilityStatus with liveStreamability
+  if (/liveStreamability/.test(html)) {
+    let videoIdMatch = html.match(/"videoId"\s*:\s*"([\w-]{11})"/)
+    if (!videoIdMatch) {
+      videoIdMatch = html.match(/"videoId":"([\w-]{11})"/)
+    }
+    return { isLive: true, videoId: videoIdMatch?.[1] }
+  }
+
+  // 5. Check for canBeUnlisted (often true for live streams)
+  const hasLiveStatus = /canBeUnlisted/.test(html) && /isLiveContent"\s*:\s*true/.test(html)
+  if (hasLiveStatus) {
+    let videoIdMatch = html.match(/"videoId"\s*:\s*"([\w-]{11})"/)
+    if (!videoIdMatch) {
+      videoIdMatch = html.match(/"videoId":"([\w-]{11})"/)
+    }
+    return { isLive: true, videoId: videoIdMatch?.[1] }
   }
 
   return { isLive: false }
@@ -208,7 +302,10 @@ export async function GET(request: NextRequest) {
   try {
     if (debugLog) debugLog.push(`Starting check for ${channelId}`)
     let fetched = await fetchHtml(liveUrl.toString())
-    if (debugLog) debugLog.push(`Fetched: ${fetched.responseUrl}, status: ${fetched.status}, size: ${fetched.html.length}`)
+    if (debugLog)
+      debugLog.push(
+        `Fetched: ${fetched.responseUrl}, status: ${fetched.status}, size: ${fetched.html.length}`
+      )
 
     const redirectedHost = (() => {
       try {
@@ -258,7 +355,9 @@ export async function GET(request: NextRequest) {
         debugLog.push(`  videoId: ${player.videoDetails?.videoId}`)
         debugLog.push(`  isLiveContent: ${player.videoDetails?.isLiveContent}`)
         debugLog.push(`  isUpcoming: ${player.videoDetails?.isUpcoming}`)
-        debugLog.push(`  isLiveNow: ${player.microformat?.playerMicroformatRenderer?.liveBroadcastDetails?.isLiveNow}`)
+        debugLog.push(
+          `  isLiveNow: ${player.microformat?.playerMicroformatRenderer?.liveBroadcastDetails?.isLiveNow}`
+        )
         debugLog.push(`  liveStreamability: ${!!player.playabilityStatus?.liveStreamability}`)
         debugLog.push(`  hlsManifestUrl: ${!!player.streamingData?.hlsManifestUrl}`)
       }
@@ -267,7 +366,10 @@ export async function GET(request: NextRequest) {
     if (player?.videoDetails?.videoId && VIDEO_ID_REGEX.test(player.videoDetails.videoId)) {
       // Safety check: avoid picking unrelated recommended videos from page blobs.
       if (player.videoDetails.channelId && player.videoDetails.channelId !== channelId) {
-        if (debugLog) debugLog.push(`Channel mismatch: expected ${channelId}, got ${player.videoDetails.channelId}`)
+        if (debugLog)
+          debugLog.push(
+            `Channel mismatch: expected ${channelId}, got ${player.videoDetails.channelId}`
+          )
         return NextResponse.json({ live: false, uncertain: true, debug: debugLog })
       }
 
@@ -283,19 +385,53 @@ export async function GET(request: NextRequest) {
       const isActuallyLive = isLiveContent && !isUpcoming
       const isLiveSignal = isLiveNow || isActuallyLive || hasLiveStreamability || hasLiveManifest
 
-      if (debugLog) debugLog.push(`Live signals: isLiveNow=${isLiveNow}, isActuallyLive=${isActuallyLive}, hasStreamability=${hasLiveStreamability}, hasManifest=${hasLiveManifest}`)
+      if (debugLog)
+        debugLog.push(
+          `Live signals: isLiveNow=${isLiveNow}, isActuallyLive=${isActuallyLive}, hasStreamability=${hasLiveStreamability}, hasManifest=${hasLiveManifest}`
+        )
 
       if (isLiveSignal) {
         if (debugLog) debugLog.push(`Detected as LIVE`)
-        return NextResponse.json({ live: true, videoId: player.videoDetails.videoId, debug: debugLog })
+        return NextResponse.json({
+          live: true,
+          videoId: player.videoDetails.videoId,
+          debug: debugLog
+        })
       }
     }
 
     // Fallback: try alternative detection if ytInitialPlayerResponse is missing
     if (debugLog) debugLog.push(`Trying alternative detection methods`)
+
+    // Try extracting from ytInitialData (tabbed content structure)
+    const initialDataResult = extractLiveStatusFromInitialData(html)
+    if (debugLog)
+      debugLog.push(
+        `ytInitialData extraction: isLive=${initialDataResult.isLive}, videoId=${initialDataResult.videoId}`
+      )
+
+    if (initialDataResult.isLive && initialDataResult.videoId) {
+      if (debugLog) debugLog.push(`Found live stream via ytInitialData`)
+      return NextResponse.json({ live: true, videoId: initialDataResult.videoId, debug: debugLog })
+    }
+
+    // Try regex-based detection on raw HTML
     const altDetection = extractLiveIndicatorsFromHtml(html)
-    if (debugLog) debugLog.push(`Alternative detection: isLive=${altDetection.isLive}, videoId=${altDetection.videoId}`)
-    
+    if (debugLog) {
+      debugLog.push(
+        `Alternative detection: isLive=${altDetection.isLive}, videoId=${altDetection.videoId}`
+      )
+      // Log what we found in the HTML
+      const hasIsLiveContent = /"isLiveContent"\s*:\s*true/.test(html)
+      const hasIsUpcoming = /"isUpcoming"\s*:\s*true/.test(html)
+      const hasManifest = /hlsManifestUrl|dashManifestUrl/.test(html)
+      const hasLiveNow = /"isLiveNow"\s*:\s*true/.test(html)
+      const hasLiveStreamability = /liveStreamability/.test(html)
+      debugLog.push(
+        `HTML indicators: isLiveContent=${hasIsLiveContent}, isUpcoming=${hasIsUpcoming}, hasManifest=${hasManifest}, isLiveNow=${hasLiveNow}, liveStreamability=${hasLiveStreamability}`
+      )
+    }
+
     if (altDetection.isLive && altDetection.videoId) {
       if (debugLog) debugLog.push(`Alternative detection found live stream`)
       return NextResponse.json({ live: true, videoId: altDetection.videoId, debug: debugLog })
