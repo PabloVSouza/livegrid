@@ -186,7 +186,9 @@ function AppClientContent() {
     return { channelId: data.channelId, title: data.title }
   }
 
-  const fetchCurrentLiveVideoId = async (channelId: string): Promise<{ videoId?: string | undefined | null; consentRequired?: boolean }> => {
+  const fetchCurrentLiveVideoId = async (
+    channelId: string
+  ): Promise<{ videoId?: string | undefined | null; consentRequired?: boolean }> => {
     try {
       const response = await fetch(`/api/channel-live?channelId=${encodeURIComponent(channelId)}`)
       const data = (await response.json()) as {
@@ -288,7 +290,11 @@ function AppClientContent() {
           if (liveResult.videoId === null) {
             return stream
           }
-          return { ...stream, videoId: liveResult.videoId, consentRequired: liveResult.consentRequired }
+          return {
+            ...stream,
+            videoId: liveResult.videoId,
+            consentRequired: liveResult.consentRequired
+          }
         })
       )
 

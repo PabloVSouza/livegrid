@@ -332,27 +332,27 @@ export async function GET(request: NextRequest) {
         if (debugLog) debugLog.push(`Consent redirect failed: ${err}`)
         consentFailed = true
       }
-      
+
       // If we couldn't bypass consent, tell the user
       if (consentFailed || isConsentInterstitialHtml(fetched.html)) {
         if (debugLog) debugLog.push(`YouTube is asking for consent - cannot determine live status`)
-        return NextResponse.json({ 
-          live: false, 
-          uncertain: true, 
+        return NextResponse.json({
+          live: false,
+          uncertain: true,
           consentRequired: true,
           message: 'YouTube consent required - cannot check live status',
-          debug: debugLog 
+          debug: debugLog
         })
       }
     } else if (isConsentInterstitialHtml(fetched.html)) {
       // Even if not redirected, check if content is a consent page
       if (debugLog) debugLog.push(`Detected consent in HTML`)
-      return NextResponse.json({ 
-        live: false, 
-        uncertain: true, 
+      return NextResponse.json({
+        live: false,
+        uncertain: true,
         consentRequired: true,
         message: 'YouTube consent required - cannot check live status',
-        debug: debugLog 
+        debug: debugLog
       })
     }
 
