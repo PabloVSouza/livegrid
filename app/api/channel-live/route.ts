@@ -98,18 +98,18 @@ export async function GET(request: NextRequest) {
 
     // YouTube now serves the page without redirect - search HTML for video data
     addLog(`No URL redirect. Searching HTML for video data...`)
-    
+
     // Search for "videoId" with value pattern
     const videoIdMatches = html.match(/"videoId"\s*:\s*"([a-zA-Z0-9_-]{11})"/g)
     if (videoIdMatches) {
       addLog(`Found ${videoIdMatches.length} video IDs in HTML`)
     }
-    
+
     // Search for live specific markers
     const hasIsLiveContent = html.includes('"isLiveContent":true')
     const hasIsLiveNow = html.includes('"isLiveNow":true')
     const hasLiveStreamability = html.includes('"liveStreamability"')
-    
+
     addLog(`"isLiveContent":true found: ${hasIsLiveContent}`)
     addLog(`"isLiveNow":true found: ${hasIsLiveNow}`)
     addLog(`"liveStreamability" found: ${hasLiveStreamability}`)
@@ -123,12 +123,12 @@ export async function GET(request: NextRequest) {
         html.lastIndexOf('"isLiveNow":true'),
         html.lastIndexOf('"liveStreamability"')
       )
-      
+
       if (liveIndex > 0) {
         // Look for videoId in the ~500 chars before the live marker
         const contextBefore = html.substring(Math.max(0, liveIndex - 2000), liveIndex)
         const vidMatch = contextBefore.match(/"videoId"\s*:\s*"([a-zA-Z0-9_-]{11})"/)
-        
+
         if (vidMatch?.[1]) {
           const videoId = vidMatch[1]
           addLog(`✅ LIVE DETECTED via HTML markers! Video ID: ${videoId}`)
