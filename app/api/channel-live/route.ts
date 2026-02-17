@@ -41,11 +41,11 @@ const fetchHtml = async (
     headers: REQUEST_HEADERS
   })
   const html = await response.text()
-  
+
   // Debug logging
   console.log(`[channel-live] Fetched ${url} -> ${response.url}`)
   console.log(`[channel-live] Status: ${response.status}, Size: ${html.length}`)
-  
+
   return { responseUrl: response.url, html, status: response.status }
 }
 
@@ -163,7 +163,7 @@ const extractInitialPlayerResponse = (html: string): InitialPlayerResponse | nul
 
 const extractLiveIndicatorsFromHtml = (html: string): { isLive: boolean; videoId?: string } => {
   // Check for live content indicators in various places
-  
+
   // 1. Check for "isLiveContent":true in the HTML
   const isLiveContentMatch = html.match(/"isLiveContent":\s*true/)
   if (isLiveContentMatch) {
@@ -190,6 +190,7 @@ const extractLiveIndicatorsFromHtml = (html: string): { isLive: boolean; videoId
 
 export async function GET(request: NextRequest) {
   const channelId = request.nextUrl.searchParams.get('channelId')?.trim() || ''
+  const debug = request.nextUrl.searchParams.get('debug') === 'true'
 
   if (!/^UC[\w-]{22}$/.test(channelId)) {
     return NextResponse.json({ error: 'Invalid channelId' }, { status: 400 })
@@ -202,8 +203,12 @@ export async function GET(request: NextRequest) {
   liveUrl.searchParams.set('ucbcb', '1')
   liveUrl.searchParams.set('has_verified', '1')
 
+  const debugLog: string[] | undefined = debug ? [] : undefined
+
   try {
+    if (debugLog) debugLog.push(`Starting check for ${channelId}`)
     let fetched = await fetchHtml(liveUrl.toString())
+    if (debugLog) debugLog.push(`Fetched: ${fetched.responseUrl}, status: ${fetched.status}, size: ${fetched.html.length}`)
 
     const redirectedHost = (() => {
       try {
@@ -214,38 +219,56 @@ export async function GET(request: NextRequest) {
     })()
 
     if (redirectedHost.includes(CONSENT_HOST)) {
+      if (debugLog) debugLog.push(`Detected consent redirect, attempting to follow`)
       try {
         const consentUrl = new URL(fetched.responseUrl)
         const continueUrl = consentUrl.searchParams.get('continue')
         if (continueUrl) {
           const decodedContinue = decodeURIComponent(continueUrl)
           fetched = await fetchHtml(decodedContinue)
+          if (debugLog) debugLog.push(`Followed consent redirect: ${fetched.responseUrl}`)
         }
       } catch (err) {
-        console.warn('Consent redirect handling failed:', err)
+        if (debugLog) debugLog.push(`Consent redirect failed: ${err}`)
         // Continue with the consent page content - might still have partial data
       }
     } else if (isConsentInterstitialHtml(fetched.html)) {
       // Even if not redirected, check if content is a consent page
-      return NextResponse.json({ live: false, uncertain: true })
+      if (debugLog) debugLog.push(`Detected consent in HTML`)
+      return NextResponse.json({ live: false, uncertain: true, debug: debugLog })
     }
 
     const redirectedVideoId = extractVideoId(fetched.responseUrl)
     if (redirectedVideoId) {
-      return NextResponse.json({ live: true, videoId: redirectedVideoId })
+      if (debugLog) debugLog.push(`Found video ID in URL: ${redirectedVideoId}`)
+      return NextResponse.json({ live: true, videoId: redirectedVideoId, debug: debugLog })
     }
 
     if (fetched.status >= 400) {
-      return NextResponse.json({ live: false, uncertain: true })
+      if (debugLog) debugLog.push(`HTTP error: ${fetched.status}`)
+      return NextResponse.json({ live: false, uncertain: true, debug: debugLog })
     }
 
     const html = fetched.html
 
     const player = extractInitialPlayerResponse(html)
+    if (debugLog) {
+      debugLog.push(`ytInitialPlayerResponse found: ${!!player}`)
+      if (player) {
+        debugLog.push(`  videoId: ${player.videoDetails?.videoId}`)
+        debugLog.push(`  isLiveContent: ${player.videoDetails?.isLiveContent}`)
+        debugLog.push(`  isUpcoming: ${player.videoDetails?.isUpcoming}`)
+        debugLog.push(`  isLiveNow: ${player.microformat?.playerMicroformatRenderer?.liveBroadcastDetails?.isLiveNow}`)
+        debugLog.push(`  liveStreamability: ${!!player.playabilityStatus?.liveStreamability}`)
+        debugLog.push(`  hlsManifestUrl: ${!!player.streamingData?.hlsManifestUrl}`)
+      }
+    }
+
     if (player?.videoDetails?.videoId && VIDEO_ID_REGEX.test(player.videoDetails.videoId)) {
       // Safety check: avoid picking unrelated recommended videos from page blobs.
       if (player.videoDetails.channelId && player.videoDetails.channelId !== channelId) {
-        return NextResponse.json({ live: false, uncertain: true })
+        if (debugLog) debugLog.push(`Channel mismatch: expected ${channelId}, got ${player.videoDetails.channelId}`)
+        return NextResponse.json({ live: false, uncertain: true, debug: debugLog })
       }
 
       const isLiveNow =
@@ -260,27 +283,37 @@ export async function GET(request: NextRequest) {
       const isActuallyLive = isLiveContent && !isUpcoming
       const isLiveSignal = isLiveNow || isActuallyLive || hasLiveStreamability || hasLiveManifest
 
+      if (debugLog) debugLog.push(`Live signals: isLiveNow=${isLiveNow}, isActuallyLive=${isActuallyLive}, hasStreamability=${hasLiveStreamability}, hasManifest=${hasLiveManifest}`)
+
       if (isLiveSignal) {
-        return NextResponse.json({ live: true, videoId: player.videoDetails.videoId })
+        if (debugLog) debugLog.push(`Detected as LIVE`)
+        return NextResponse.json({ live: true, videoId: player.videoDetails.videoId, debug: debugLog })
       }
     }
 
     // Fallback: try alternative detection if ytInitialPlayerResponse is missing
-    console.log('[channel-live] ytInitialPlayerResponse not found or invalid, trying alternative detection')
+    if (debugLog) debugLog.push(`Trying alternative detection methods`)
     const altDetection = extractLiveIndicatorsFromHtml(html)
+    if (debugLog) debugLog.push(`Alternative detection: isLive=${altDetection.isLive}, videoId=${altDetection.videoId}`)
+    
     if (altDetection.isLive && altDetection.videoId) {
-      console.log(`[channel-live] Alternative detection found live stream: ${altDetection.videoId}`)
-      return NextResponse.json({ live: true, videoId: altDetection.videoId })
+      if (debugLog) debugLog.push(`Alternative detection found live stream`)
+      return NextResponse.json({ live: true, videoId: altDetection.videoId, debug: debugLog })
     }
 
     // If parsing succeeds but no clear "live now" marker exists, treat as explicit offline.
     if (/watch\?v=/.test(html)) {
-      return NextResponse.json({ live: false })
+      if (debugLog) debugLog.push(`Found watch URL, marking as offline`)
+      return NextResponse.json({ live: false, debug: debugLog })
     }
 
-    return NextResponse.json({ live: false, uncertain: true })
+    if (debugLog) debugLog.push(`No live signals found, returning uncertain`)
+    return NextResponse.json({ live: false, uncertain: true, debug: debugLog })
   } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error)
+    if (debugLog) debugLog.push(`FATAL ERROR: ${errorMsg}`)
     console.error('[channel-live] Channel live check error for', channelId, ':', error)
-    return NextResponse.json({ live: false, uncertain: true })
+    return NextResponse.json({ live: false, uncertain: true, debug: debugLog, error: errorMsg })
   }
+}
 }
