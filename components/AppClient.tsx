@@ -313,11 +313,11 @@ function AppClientContent() {
 
   return (
     <div className="w-screen h-screen bg-black text-white flex flex-col">
-      <header className="relative bg-black border-b border-gray-800 px-3 py-2 flex items-center justify-end min-h-16">
+      <header className="bg-black border-b border-gray-800 px-3 py-2 flex items-center justify-between min-h-16">
         <img
           src="/livegrid-logo.svg"
           alt={t("app.title")}
-          className="absolute left-1/2 -translate-x-1/2 h-12 w-auto bg-transparent border-0 shadow-none"
+          className="h-12 w-auto bg-transparent border-0 shadow-none"
         />
         <div className="flex items-center gap-2">
           {!isWelcomeMode && (
