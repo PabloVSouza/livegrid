@@ -4,6 +4,7 @@ export interface Livestream {
   channelId?: string
   title: string
   videoId?: string
+  consentRequired?: boolean
   priority?: number
   widthPercent?: number
   heightPercent?: number

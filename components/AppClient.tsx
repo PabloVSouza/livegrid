@@ -186,39 +186,44 @@ function AppClientContent() {
     return { channelId: data.channelId, title: data.title }
   }
 
-  const fetchCurrentLiveVideoId = async (channelId: string): Promise<string | undefined | null> => {
+  const fetchCurrentLiveVideoId = async (channelId: string): Promise<{ videoId?: string | undefined | null; consentRequired?: boolean }> => {
     try {
       const response = await fetch(`/api/channel-live?channelId=${encodeURIComponent(channelId)}`)
       const data = (await response.json()) as {
         live?: boolean
         uncertain?: boolean
         videoId?: string
+        consentRequired?: boolean
         error?: string
       }
       if (!response.ok) {
         throw new Error(data.error || 'Failed to check channel live status')
       }
-      if (data.uncertain) {
-        return null
+      if (data.consentRequired) {
+        return { videoId: undefined, consentRequired: true }
       }
-      return data.live ? data.videoId : undefined
+      if (data.uncertain) {
+        return { videoId: null }
+      }
+      return { videoId: data.live ? data.videoId : undefined }
     } catch (error) {
       console.warn('Live status check inconclusive:', channelId, error)
-      return null
+      return { videoId: null }
     }
   }
 
   const createLivestream = async (channelUrl: string, title: string): Promise<Livestream> => {
     const resolved = await resolveChannel(channelUrl)
     const resolvedTitle = title.trim() || resolved.title || fallbackTitleFromUrl(channelUrl)
-    const liveVideoId = await fetchCurrentLiveVideoId(resolved.channelId)
+    const liveResult = await fetchCurrentLiveVideoId(resolved.channelId)
 
     return {
       id: createId(),
       channelUrl,
       channelId: resolved.channelId,
       title: resolvedTitle,
-      videoId: liveVideoId ?? undefined
+      videoId: liveResult.videoId ?? undefined,
+      consentRequired: liveResult.consentRequired
     }
   }
 
@@ -279,11 +284,11 @@ function AppClientContent() {
             return stream
           }
 
-          const liveVideoId = await fetchCurrentLiveVideoId(stream.channelId)
-          if (liveVideoId === null) {
+          const liveResult = await fetchCurrentLiveVideoId(stream.channelId)
+          if (liveResult.videoId === null) {
             return stream
           }
-          return { ...stream, videoId: liveVideoId }
+          return { ...stream, videoId: liveResult.videoId, consentRequired: liveResult.consentRequired }
         })
       )
 

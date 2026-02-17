@@ -63,6 +63,7 @@ type TranslationKey =
   | "input.cancel"
   | "player.remove"
   | "player.notStreaming"
+  | "player.consentRequired"
   | "player.waiting"
   | "player.adjusting"
 
@@ -110,6 +111,7 @@ const messages: Record<Locale, Partial<Record<TranslationKey, string>>> = {
     "input.cancel": "Cancel",
     "player.remove": "Remove stream",
     "player.notStreaming": "Channel not streaming right now",
+    "player.consentRequired": "Consent Required",
     "player.waiting": "Waiting for this channel to go live",
     "player.adjusting": "Adjusting layout..."
   },
@@ -157,6 +159,7 @@ const messages: Record<Locale, Partial<Record<TranslationKey, string>>> = {
     "input.cancel": "Cancelar",
     "player.remove": "Remover stream",
     "player.notStreaming": "Canal não está transmitindo agora",
+    "player.consentRequired": "Consentimento Obrigatório",
     "player.waiting": "Aguardando este canal entrar ao vivo",
     "player.adjusting": "Ajustando layout..."
   },
@@ -177,6 +180,7 @@ const messages: Record<Locale, Partial<Record<TranslationKey, string>>> = {
     "input.cancel": "取消",
     "player.remove": "移除直播",
     "player.notStreaming": "频道当前未在直播",
+    "player.consentRequired": "需要同意",
     "player.waiting": "等待该频道开播",
     "player.adjusting": "正在调整布局..."
   },
@@ -197,6 +201,7 @@ const messages: Record<Locale, Partial<Record<TranslationKey, string>>> = {
     "input.cancel": "रद्द करें",
     "player.remove": "स्ट्रीम हटाएँ",
     "player.notStreaming": "चैनल अभी स्ट्रीम नहीं कर रहा है",
+    "player.consentRequired": "सहमति आवश्यक है",
     "player.waiting": "इस चैनल के लाइव होने का इंतज़ार है",
     "player.adjusting": "लेआउट समायोजित हो रहा है..."
   },
@@ -217,6 +222,7 @@ const messages: Record<Locale, Partial<Record<TranslationKey, string>>> = {
     "input.cancel": "Cancelar",
     "player.remove": "Eliminar stream",
     "player.notStreaming": "El canal no está transmitiendo ahora",
+    "player.consentRequired": "Se requiere consentimiento",
     "player.waiting": "Esperando a que este canal entre en vivo",
     "player.adjusting": "Ajustando diseño..."
   },
@@ -237,6 +243,7 @@ const messages: Record<Locale, Partial<Record<TranslationKey, string>>> = {
     "input.cancel": "Annuler",
     "player.remove": "Supprimer le stream",
     "player.notStreaming": "La chaîne ne diffuse pas en ce moment",
+    "player.consentRequired": "Consentement requis",
     "player.waiting": "En attente du démarrage du live",
     "player.adjusting": "Ajustement de la mise en page..."
   },
@@ -257,6 +264,7 @@ const messages: Record<Locale, Partial<Record<TranslationKey, string>>> = {
     "input.cancel": "إلغاء",
     "player.remove": "إزالة البث",
     "player.notStreaming": "القناة لا تبث الآن",
+    "player.consentRequired": "موافقة مطلوبة",
     "player.waiting": "بانتظار أن تبدأ هذه القناة البث",
     "player.adjusting": "جارٍ ضبط التخطيط..."
   },
@@ -277,6 +285,7 @@ const messages: Record<Locale, Partial<Record<TranslationKey, string>>> = {
     "input.cancel": "বাতিল",
     "player.remove": "স্ট্রিম সরান",
     "player.notStreaming": "চ্যানেলটি এখন স্ট্রিম করছে না",
+    "player.consentRequired": "সম্মতি প্রয়োজন",
     "player.waiting": "এই চ্যানেল লাইভ হওয়ার অপেক্ষায়",
     "player.adjusting": "লেআউট সমন্বয় করা হচ্ছে..."
   },
@@ -297,6 +306,7 @@ const messages: Record<Locale, Partial<Record<TranslationKey, string>>> = {
     "input.cancel": "Отмена",
     "player.remove": "Удалить стрим",
     "player.notStreaming": "Канал сейчас не ведет трансляцию",
+    "player.consentRequired": "Требуется согласие",
     "player.waiting": "Ожидание начала трансляции на этом канале",
     "player.adjusting": "Настройка раскладки..."
   },
@@ -317,6 +327,7 @@ const messages: Record<Locale, Partial<Record<TranslationKey, string>>> = {
     "input.cancel": "منسوخ کریں",
     "player.remove": "اسٹریم ہٹائیں",
     "player.notStreaming": "چینل اس وقت اسٹریم نہیں کر رہا",
+    "player.consentRequired": "رضامندی درکار ہے",
     "player.waiting": "اس چینل کے لائیو ہونے کا انتظار ہے",
     "player.adjusting": "لے آؤٹ ایڈجسٹ ہو رہا ہے..."
   }

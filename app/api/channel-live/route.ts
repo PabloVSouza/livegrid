@@ -317,6 +317,7 @@ export async function GET(request: NextRequest) {
 
     if (redirectedHost.includes(CONSENT_HOST)) {
       if (debugLog) debugLog.push(`Detected consent redirect, attempting to follow`)
+      let consentFailed = false
       try {
         const consentUrl = new URL(fetched.responseUrl)
         const continueUrl = consentUrl.searchParams.get('continue')
@@ -324,15 +325,35 @@ export async function GET(request: NextRequest) {
           const decodedContinue = decodeURIComponent(continueUrl)
           fetched = await fetchHtml(decodedContinue)
           if (debugLog) debugLog.push(`Followed consent redirect: ${fetched.responseUrl}`)
+        } else {
+          consentFailed = true
         }
       } catch (err) {
         if (debugLog) debugLog.push(`Consent redirect failed: ${err}`)
-        // Continue with the consent page content - might still have partial data
+        consentFailed = true
+      }
+      
+      // If we couldn't bypass consent, tell the user
+      if (consentFailed || isConsentInterstitialHtml(fetched.html)) {
+        if (debugLog) debugLog.push(`YouTube is asking for consent - cannot determine live status`)
+        return NextResponse.json({ 
+          live: false, 
+          uncertain: true, 
+          consentRequired: true,
+          message: 'YouTube consent required - cannot check live status',
+          debug: debugLog 
+        })
       }
     } else if (isConsentInterstitialHtml(fetched.html)) {
       // Even if not redirected, check if content is a consent page
       if (debugLog) debugLog.push(`Detected consent in HTML`)
-      return NextResponse.json({ live: false, uncertain: true, debug: debugLog })
+      return NextResponse.json({ 
+        live: false, 
+        uncertain: true, 
+        consentRequired: true,
+        message: 'YouTube consent required - cannot check live status',
+        debug: debugLog 
+      })
     }
 
     const redirectedVideoId = extractVideoId(fetched.responseUrl)

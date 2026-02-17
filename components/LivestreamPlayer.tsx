@@ -41,7 +41,15 @@ export const LivestreamPlayer: FC<LivestreamPlayerProps> = ({ stream, onRemove }
 
       <div className="flex-1 bg-black relative">
         <div className="player-live-content w-full h-full">
-          {embedUrl ? (
+          {stream.consentRequired ? (
+            <div className="w-full h-full flex flex-col items-center justify-center text-yellow-600 bg-gray-950">
+              <svg className="w-12 h-12 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4v2m0 0a7 7 0 1 1 0-14 7 7 0 0 1 0 14z" />
+              </svg>
+              <p className="text-sm font-semibold">{t("player.consentRequired")}</p>
+              <p className="text-xs text-gray-500 mt-1">YouTube requires consent to check this channel</p>
+            </div>
+          ) : embedUrl ? (
             <iframe
               src={embedUrl}
               className="w-full h-full"
