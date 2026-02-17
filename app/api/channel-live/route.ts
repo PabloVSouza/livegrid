@@ -110,6 +110,7 @@ export async function GET(request: NextRequest) {
     const firstVidMatch = html.match(/"videoId"\s*:\s*"([a-zA-Z0-9_-]{11})"/)
     if (firstVidMatch?.[1]) {
       firstVideoId = firstVidMatch[1]
+      addLog(`First videoId found: ${firstVideoId}`)
     }
 
     // Search for live specific markers using regex (with flexible spacing)
@@ -117,23 +118,39 @@ export async function GET(request: NextRequest) {
     const liveContentMatch = html.match(/"isLiveContent"\s*:\s*true/)
     const upcomingMatch = html.match(/"isUpcoming"\s*:\s*true/)
     const liveStreamabilityMatch = html.match(/"liveStreamability"/)
+    
+    // Also search for alternative markers
+    const videoBadgeMatch = html.match(/"videoBadgeRenderer"/)
+    const liveChipMatch = html.match(/"liveChip"/)
+    const isLiveMatch = html.match(/"isLive"\s*:\s*true/)
+    const statusMatch = html.match(/"status"\s*:\s*"LIVE"/)
 
     const hasLiveNow = !!liveNowMatch
     const hasLiveContent = !!liveContentMatch
     const hasUpcoming = !!upcomingMatch
     const hasLiveStreamability = !!liveStreamabilityMatch
+    const hasVideoBadge = !!videoBadgeMatch
+    const hasLiveChip = !!liveChipMatch
+    const hasIsLive = !!isLiveMatch
+    const hasStatus = !!statusMatch
 
-    addLog(`"isLiveNow": ${hasLiveNow}`)
-    addLog(`"isLiveContent": ${hasLiveContent}`)
-    addLog(`"isUpcoming": ${hasUpcoming}`)
-    addLog(`"liveStreamability": ${hasLiveStreamability}`)
+    addLog(`Markers - isLiveNow: ${hasLiveNow}, isLiveContent: ${hasLiveContent}, isUpcoming: ${hasUpcoming}`)
+    addLog(`Markers - liveStreamability: ${hasLiveStreamability}, videoBadge: ${hasVideoBadge}`)
+    addLog(`Markers - liveChip: ${hasLiveChip}, isLive: ${hasIsLive}, status: ${hasStatus}`)
 
     // Logic:
     // - If isLiveNow=true, it's actively live
     // - If isLiveContent=true AND isUpcoming=false, it's live or was recently live
     // - If liveStreamability exists, the stream has/had live capability
+    // - Alternative markers: status="LIVE", isLive=true, videoBadge, liveChip
     const isLive =
-      hasLiveNow || (hasLiveContent && !hasUpcoming) || (hasLiveStreamability && firstVideoId)
+      hasLiveNow || 
+      hasIsLive ||
+      hasStatus ||
+      hasVideoBadge ||
+      hasLiveChip ||
+      hasLiveStreamability ||
+      (hasLiveContent && !hasUpcoming)
 
     if (isLive) {
       addLog(`Live stream detected! Looking for video ID...`)
@@ -142,16 +159,24 @@ export async function GET(request: NextRequest) {
       let videoId: string | undefined = firstVideoId
 
       // Search around the live markers for the specific videoId
-      if (liveNowMatch) {
-        const liveIndex = html.indexOf(liveNowMatch[0])
-        const context = html.substring(Math.max(0, liveIndex - 1000), liveIndex + 500)
+      const markers = [
+        liveNowMatch,
+        isLiveMatch,
+        statusMatch,
+        liveContentMatch,
+        liveStreamabilityMatch
+      ].filter(Boolean)
+
+      for (const marker of markers) {
+        if (!marker) continue
+        const liveIndex = html.indexOf(marker[0])
+        const context = html.substring(Math.max(0, liveIndex - 1500), liveIndex + 1000)
         const vidMatch = context.match(/"videoId"\s*:\s*"([a-zA-Z0-9_-]{11})"/)
-        if (vidMatch?.[1]) videoId = vidMatch[1]
-      } else if (liveContentMatch) {
-        const liveIndex = html.indexOf(liveContentMatch[0])
-        const context = html.substring(Math.max(0, liveIndex - 1000), liveIndex + 500)
-        const vidMatch = context.match(/"videoId"\s*:\s*"([a-zA-Z0-9_-]{11})"/)
-        if (vidMatch?.[1]) videoId = vidMatch[1]
+        if (vidMatch?.[1]) {
+          videoId = vidMatch[1]
+          addLog(`Found videoId near marker: ${videoId}`)
+          break
+        }
       }
 
       if (videoId) {
@@ -165,6 +190,8 @@ export async function GET(request: NextRequest) {
           },
           { status: 200 }
         )
+      } else {
+        addLog(`Live markers found but no videoId extracted`)
       }
     }
 
