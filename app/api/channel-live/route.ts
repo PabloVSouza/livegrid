@@ -316,4 +316,3 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ live: false, uncertain: true, debug: debugLog, error: errorMsg })
   }
 }
-}
