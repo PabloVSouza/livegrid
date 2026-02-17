@@ -11,7 +11,12 @@ const REQUEST_HEADERS: HeadersInit = {
   'user-agent':
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
   'accept-language': 'en-US,en;q=0.9',
-  cookie: 'CONSENT=YES+cb.20210328-17-p0.en+FX+917'
+  'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+  'sec-fetch-dest': 'document',
+  'sec-fetch-mode': 'navigate',
+  'sec-fetch-site': 'none',
+  'cache-control': 'max-age=0',
+  cookie: 'CONSENT=YES+1'
 }
 
 const isConsentInterstitialHtml = (html: string): boolean => {
@@ -171,6 +176,7 @@ export async function GET(request: NextRequest) {
         return ''
       }
     })()
+    
     if (redirectedHost.includes(CONSENT_HOST)) {
       try {
         const consentUrl = new URL(fetched.responseUrl)
@@ -179,9 +185,13 @@ export async function GET(request: NextRequest) {
           const decodedContinue = decodeURIComponent(continueUrl)
           fetched = await fetchHtml(decodedContinue)
         }
-      } catch {
-        // ignore and keep fallback below
+      } catch (err) {
+        console.warn('Consent redirect handling failed:', err)
+        // Continue with the consent page content - might still have partial data
       }
+    } else if (isConsentInterstitialHtml(fetched.html)) {
+      // Even if not redirected, check if content is a consent page
+      return NextResponse.json({ live: false, uncertain: true })
     }
 
     const redirectedVideoId = extractVideoId(fetched.responseUrl)
@@ -194,9 +204,6 @@ export async function GET(request: NextRequest) {
     }
 
     const html = fetched.html
-    if (isConsentInterstitialHtml(html)) {
-      return NextResponse.json({ live: false, uncertain: true })
-    }
 
     const player = extractInitialPlayerResponse(html)
     if (player?.videoDetails?.videoId && VIDEO_ID_REGEX.test(player.videoDetails.videoId)) {
