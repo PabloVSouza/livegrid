@@ -144,12 +144,7 @@ export async function GET(request: NextRequest) {
       let videoId: string | undefined = firstVideoId
 
       // Search around the live markers for the specific videoId
-      const markers = [
-        liveNowMatch,
-        isLiveMatch,
-        statusMatch,
-        liveContentMatch
-      ].filter(Boolean)
+      const markers = [liveNowMatch, isLiveMatch, statusMatch, liveContentMatch].filter(Boolean)
 
       for (const marker of markers) {
         if (!marker) continue
