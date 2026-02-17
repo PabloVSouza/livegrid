@@ -32,6 +32,16 @@ type TranslationKey =
   | "app.currentProject"
   | "app.projectPrompt"
   | "app.projectDeleteConfirm"
+  | "welcome.title"
+  | "welcome.subtitle"
+  | "welcome.create"
+  | "welcome.projects"
+  | "welcome.openProject"
+  | "welcome.noProjects"
+  | "welcome.channels"
+  | "welcome.presets"
+  | "welcome.importPreset"
+  | "welcome.importing"
   | "app.empty"
   | "app.loading"
   | "about.title"
@@ -69,6 +79,16 @@ const messages: Record<Locale, Partial<Record<TranslationKey, string>>> = {
     "app.currentProject": "Current project",
     "app.projectPrompt": "Project name",
     "app.projectDeleteConfirm": "Delete current project?",
+    "welcome.title": "Welcome to LiveGrid",
+    "welcome.subtitle": "Create a blank grid or start from a preset.",
+    "welcome.create": "Create Blank Grid",
+    "welcome.projects": "Your Projects",
+    "welcome.openProject": "Open Project",
+    "welcome.noProjects": "No projects yet. Create a blank grid or import a preset.",
+    "welcome.channels": "channels",
+    "welcome.presets": "Featured Projects",
+    "welcome.importPreset": "Import Preset",
+    "welcome.importing": "Importing...",
     "app.empty": "Add your first livestream to get started",
     "app.loading": "Loading channels...",
     "about.title": "About LiveGrid",
@@ -105,6 +125,16 @@ const messages: Record<Locale, Partial<Record<TranslationKey, string>>> = {
     "app.currentProject": "Projeto atual",
     "app.projectPrompt": "Nome do projeto",
     "app.projectDeleteConfirm": "Excluir o projeto atual?",
+    "welcome.title": "Bem-vindo ao LiveGrid",
+    "welcome.subtitle": "Crie um grid vazio ou comece com um preset.",
+    "welcome.create": "Criar Grid Vazio",
+    "welcome.projects": "Seus Projetos",
+    "welcome.openProject": "Abrir Projeto",
+    "welcome.noProjects": "Nenhum projeto ainda. Crie um grid vazio ou importe um preset.",
+    "welcome.channels": "canais",
+    "welcome.presets": "Projetos em destaque",
+    "welcome.importPreset": "Importar Preset",
+    "welcome.importing": "Importando...",
     "app.empty": "Adicione sua primeira live para começar",
     "app.loading": "Carregando canais...",
     "about.title": "Sobre o LiveGrid",

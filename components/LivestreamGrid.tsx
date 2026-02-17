@@ -18,6 +18,7 @@ interface LayoutItem {
 interface Props {
   livestreams: Livestream[]
   onRemove: (id: string) => void
+  layoutStorageKey: string
 }
 
 interface GridMetrics {
@@ -29,15 +30,14 @@ interface GridMetrics {
   rowHeight: number
 }
 
-const MANUAL_LAYOUT_STORAGE_KEY = "youtube_manual_layout_v1"
 const TARGET_ASPECT = 16 / 9
 const TARGET_ROW_PX = 180
 
-const loadStoredManualLayout = (): LayoutItem[] | null => {
+const loadStoredManualLayout = (storageKey: string): LayoutItem[] | null => {
   if (typeof window === "undefined") return null
 
   try {
-    const raw = localStorage.getItem(MANUAL_LAYOUT_STORAGE_KEY)
+    const raw = localStorage.getItem(storageKey)
     if (!raw) return null
     const parsed = JSON.parse(raw) as LayoutItem[]
     return Array.isArray(parsed) ? parsed : null
@@ -46,14 +46,14 @@ const loadStoredManualLayout = (): LayoutItem[] | null => {
   }
 }
 
-const saveStoredManualLayout = (layout: LayoutItem[] | null): void => {
+const saveStoredManualLayout = (storageKey: string, layout: LayoutItem[] | null): void => {
   if (typeof window === "undefined") return
   try {
     if (!layout || layout.length === 0) {
-      localStorage.removeItem(MANUAL_LAYOUT_STORAGE_KEY)
+      localStorage.removeItem(storageKey)
       return
     }
-    localStorage.setItem(MANUAL_LAYOUT_STORAGE_KEY, JSON.stringify(layout))
+    localStorage.setItem(storageKey, JSON.stringify(layout))
   } catch {
     // ignore storage errors
   }
@@ -239,7 +239,7 @@ const buildEvenLayout = (streams: Livestream[], metrics: GridMetrics): LayoutIte
   return result
 }
 
-export const LivestreamGrid: FC<Props> = ({ livestreams, onRemove }) => {
+export const LivestreamGrid: FC<Props> = ({ livestreams, onRemove, layoutStorageKey }) => {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const [gridSize, setGridSize] = useState({
     // Keep first render deterministic between SSR and client hydration.
@@ -254,8 +254,8 @@ export const LivestreamGrid: FC<Props> = ({ livestreams, onRemove }) => {
   const resizeRejectedRef = useRef(false)
 
   useEffect(() => {
-    setManualLayout(loadStoredManualLayout())
-  }, [])
+    setManualLayout(loadStoredManualLayout(layoutStorageKey))
+  }, [layoutStorageKey])
 
   useEffect(() => {
     const node = containerRef.current
@@ -324,7 +324,7 @@ export const LivestreamGrid: FC<Props> = ({ livestreams, onRemove }) => {
     const streamIds = new Set(livestreams.map((stream) => stream.id))
     const next = normalizeLayout(layoutItems, streamIds, metrics)
     setManualLayout(next)
-    saveStoredManualLayout(next)
+    saveStoredManualLayout(layoutStorageKey, next)
     lastValidLayoutRef.current = next
   }
 
