@@ -128,11 +128,12 @@ export async function GET(request: NextRequest) {
     addLog(`"isUpcoming": ${hasUpcoming}`)
     addLog(`"liveStreamability": ${hasLiveStreamability}`)
 
-    // Logic: 
+    // Logic:
     // - If isLiveNow=true, it's actively live
     // - If isLiveContent=true AND isUpcoming=false, it's live or was recently live
     // - If liveStreamability exists, the stream has/had live capability
-    const isLive = hasLiveNow || (hasLiveContent && !hasUpcoming) || (hasLiveStreamability && firstVideoId)
+    const isLive =
+      hasLiveNow || (hasLiveContent && !hasUpcoming) || (hasLiveStreamability && firstVideoId)
 
     if (isLive) {
       addLog(`Live stream detected! Looking for video ID...`)
