@@ -25,9 +25,11 @@ interface GridMetrics {
   width: number
   layoutWidth: number
   height: number
+  contentHeight: number
   cols: number
   rows: number
   rowHeight: number
+  isMobile: boolean
 }
 
 const TARGET_ASPECT = 16 / 9
@@ -78,11 +80,31 @@ const buildRowHeights = (rowsToUse: number, totalRows: number): number[] => {
   return Array.from({ length: safeRowsToUse }, (_, index) => base + (index < extra ? 1 : 0))
 }
 
-const computeGridMetrics = (width: number, height: number): GridMetrics => {
+const computeGridMetrics = (width: number, height: number, itemCount: number): GridMetrics => {
   const safeWidth = Math.max(1, width)
   const safeHeight = Math.max(1, height)
-  const maxRowsByMinHeight = Math.max(1, Math.floor(safeHeight / TARGET_ROW_PX))
+  const isMobile = safeWidth < 768
 
+  if (isMobile) {
+    const rowHeight = TARGET_ROW_PX
+    const cellWidth = rowHeight * TARGET_ASPECT
+    const cols = Math.max(1, Math.floor(safeWidth / cellWidth))
+    const rows = Math.max(1, Math.ceil(Math.max(1, itemCount) / cols))
+    const contentHeight = rows * rowHeight
+
+    return {
+      width: safeWidth,
+      layoutWidth: safeWidth,
+      height: safeHeight,
+      contentHeight,
+      cols,
+      rows,
+      rowHeight,
+      isMobile
+    }
+  }
+
+  const maxRowsByMinHeight = Math.max(1, Math.floor(safeHeight / TARGET_ROW_PX))
   const rows = maxRowsByMinHeight
   const rowHeight = safeHeight / rows
   const cellWidth = rowHeight * TARGET_ASPECT
@@ -95,9 +117,11 @@ const computeGridMetrics = (width: number, height: number): GridMetrics => {
     width: safeWidth,
     layoutWidth,
     height: safeHeight,
+    contentHeight: safeHeight,
     cols,
     rows,
-    rowHeight
+    rowHeight,
+    isMobile
   }
 }
 
@@ -275,8 +299,8 @@ export const LivestreamGrid: FC<Props> = ({ livestreams, onRemove, layoutStorage
   }, [])
 
   const metrics = useMemo(
-    () => computeGridMetrics(gridSize.width, gridSize.height),
-    [gridSize.width, gridSize.height]
+    () => computeGridMetrics(gridSize.width, gridSize.height, livestreams.length),
+    [gridSize.width, gridSize.height, livestreams.length]
   )
 
   const defaultLayout = useMemo(() => buildEvenLayout(livestreams, metrics), [livestreams, metrics])
@@ -375,7 +399,7 @@ export const LivestreamGrid: FC<Props> = ({ livestreams, onRemove, layoutStorage
   return (
     <div
       ref={containerRef}
-      className={`w-full h-full overflow-hidden bg-black ${isInteracting ? "grid-interacting" : ""} ${
+      className={`w-full h-full overflow-x-hidden overflow-y-auto bg-black ${isInteracting ? "grid-interacting" : ""} ${
         isResizeInvalid ? "resize-invalid" : ""
       }`}
     >
@@ -440,7 +464,7 @@ export const LivestreamGrid: FC<Props> = ({ livestreams, onRemove, layoutStorage
         resizeConfig={{ enabled: true, handles: ["n", "s", "e", "w", "ne", "nw", "se", "sw"] }}
         width={metrics.layoutWidth}
         style={{
-          height: "100%",
+          height: metrics.isMobile ? `${metrics.contentHeight}px` : "100%",
           backgroundColor: "#030712",
           backgroundImage:
             "linear-gradient(to right, rgba(59,130,246,0.12) 1px, transparent 1px), linear-gradient(to bottom, rgba(59,130,246,0.12) 1px, transparent 1px)",

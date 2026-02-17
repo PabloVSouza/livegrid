@@ -1,23 +1,24 @@
-"use client"
+'use client'
 
-import { useEffect, useMemo, useRef, useState } from "react"
-import { URLInput } from "./URLInput"
-import { LivestreamGrid } from "./LivestreamGrid"
-import type { Livestream } from "./types"
-import { I18nProvider, localeLabels, useI18n } from "./i18n"
-import { AboutModal } from "./AboutModal"
-import { WelcomeScreen } from "./WelcomeScreen"
-import { LIVEGRID_PRESETS, type PresetDefinition } from "@/data/presets"
-import { Button } from "@/components/ui/button"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import { CirclePlus, House, Info, Languages } from "lucide-react"
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { URLInput } from './URLInput'
+import { LivestreamGrid } from './LivestreamGrid'
+import type { Livestream } from './types'
+import { I18nProvider, localeLabels, useI18n } from './i18n'
+import { AboutModal } from './AboutModal'
+import { WelcomeScreen } from './WelcomeScreen'
+import { LIVEGRID_PRESETS, type PresetDefinition } from '@/data/presets'
+import { Button } from '@/components/ui/button'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { CirclePlus, House, Info, Languages } from 'lucide-react'
 
-const STORAGE_KEY = "livegrid_projects_v1"
-const LEGACY_STREAMS_KEY = "youtube_livestreams"
+const STORAGE_KEY = 'livegrid_projects_v1'
+const ACTIVE_PROJECT_STORAGE_KEY = 'livegrid_active_project_v1'
+const LEGACY_STREAMS_KEY = 'youtube_livestreams'
 const REFRESH_INTERVAL_MS = 60_000
 
-type StoredLivestream = Omit<Livestream, "videoId">
+type StoredLivestream = Omit<Livestream, 'videoId'>
 
 interface LiveGridProject {
   id: string
@@ -34,7 +35,7 @@ interface StoredProject {
 }
 
 const createId = (): string =>
-  typeof crypto !== "undefined" && "randomUUID" in crypto
+  typeof crypto !== 'undefined' && 'randomUUID' in crypto
     ? crypto.randomUUID()
     : `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 
@@ -45,7 +46,7 @@ const fallbackTitleFromUrl = (url: string): string => {
   const channelMatch = url.match(/\/(channel|c)\/([a-zA-Z0-9_-]+)/)
   if (channelMatch?.[2]) return channelMatch[2]
 
-  return "Channel"
+  return 'Channel'
 }
 
 const deserializeProjects = (raw: string | null): LiveGridProject[] => {
@@ -92,15 +93,25 @@ function AppClientContent() {
   }, [projects])
 
   useEffect(() => {
-    const loadedProjects = deserializeProjects(typeof window !== "undefined" ? localStorage.getItem(STORAGE_KEY) : null)
+    const loadedProjects = deserializeProjects(
+      typeof window !== 'undefined' ? localStorage.getItem(STORAGE_KEY) : null
+    )
+    const storedActiveProjectId =
+      typeof window !== 'undefined' ? localStorage.getItem(ACTIVE_PROJECT_STORAGE_KEY) : null
 
     if (loadedProjects.length > 0) {
       setProjects(loadedProjects)
+      const activeExists = storedActiveProjectId
+        ? loadedProjects.some((project) => project.id === storedActiveProjectId)
+        : false
+      if (activeExists && storedActiveProjectId) {
+        setActiveProjectId(storedActiveProjectId)
+      }
       setIsHydrated(true)
       return
     }
 
-    if (typeof window !== "undefined") {
+    if (typeof window !== 'undefined') {
       const legacyRaw = localStorage.getItem(LEGACY_STREAMS_KEY)
       if (legacyRaw) {
         try {
@@ -108,11 +119,12 @@ function AppClientContent() {
           if (Array.isArray(legacy) && legacy.length > 0) {
             const migratedProject: LiveGridProject = {
               id: createId(),
-              name: "Migrated Project",
+              name: 'Migrated Project',
               createdAt: new Date().toISOString(),
               livestreams: legacy.map((stream) => ({ ...stream, videoId: undefined }))
             }
             setProjects([migratedProject])
+            setActiveProjectId(migratedProject.id)
           }
         } catch {
           // ignore legacy migration issues
@@ -124,9 +136,26 @@ function AppClientContent() {
   }, [])
 
   useEffect(() => {
-    if (!isHydrated || typeof window === "undefined") return
+    if (!isHydrated || typeof window === 'undefined') return
     localStorage.setItem(STORAGE_KEY, JSON.stringify(serializeProjects(projects)))
   }, [projects, isHydrated])
+
+  useEffect(() => {
+    if (!isHydrated || typeof window === 'undefined') return
+    if (activeProjectId) {
+      localStorage.setItem(ACTIVE_PROJECT_STORAGE_KEY, activeProjectId)
+    } else {
+      localStorage.removeItem(ACTIVE_PROJECT_STORAGE_KEY)
+    }
+  }, [activeProjectId, isHydrated])
+
+  useEffect(() => {
+    if (!activeProjectId) return
+    const exists = projects.some((project) => project.id === activeProjectId)
+    if (!exists) {
+      setActiveProjectId(null)
+    }
+  }, [projects, activeProjectId])
 
   const activeProject = useMemo(
     () => projects.find((project) => project.id === activeProjectId) ?? null,
@@ -144,12 +173,14 @@ function AppClientContent() {
 
   const activeLivestreams = activeProject?.livestreams ?? []
 
-  const resolveChannel = async (channelUrl: string): Promise<{ channelId: string; title?: string }> => {
+  const resolveChannel = async (
+    channelUrl: string
+  ): Promise<{ channelId: string; title?: string }> => {
     const response = await fetch(`/api/resolve-channel?url=${encodeURIComponent(channelUrl)}`)
     const data = (await response.json()) as { channelId?: string; title?: string; error?: string }
 
     if (!response.ok || !data.channelId) {
-      throw new Error(data.error || "Could not resolve channel")
+      throw new Error(data.error || 'Could not resolve channel')
     }
 
     return { channelId: data.channelId, title: data.title }
@@ -160,11 +191,11 @@ function AppClientContent() {
       const response = await fetch(`/api/channel-live?channelId=${encodeURIComponent(channelId)}`)
       const data = (await response.json()) as { live?: boolean; videoId?: string; error?: string }
       if (!response.ok) {
-        throw new Error(data.error || "Failed to check channel live status")
+        throw new Error(data.error || 'Failed to check channel live status')
       }
       return data.live ? data.videoId : undefined
     } catch (error) {
-      console.error("Live status check failed:", channelId, error)
+      console.error('Live status check failed:', channelId, error)
       return undefined
     }
   }
@@ -204,7 +235,7 @@ function AppClientContent() {
         const stream = await createLivestream(entry.channelUrl, entry.title)
         created.push(stream)
       } catch (error) {
-        console.error("Failed to add channel:", entry.channelUrl, error)
+        console.error('Failed to add channel:', entry.channelUrl, error)
       }
     }
 
@@ -212,7 +243,9 @@ function AppClientContent() {
 
     updateActiveProjectLivestreams((current) => {
       const existingIds = new Set(current.map((stream) => stream.channelId))
-      const uniqueNew = created.filter((stream) => !stream.channelId || !existingIds.has(stream.channelId))
+      const uniqueNew = created.filter(
+        (stream) => !stream.channelId || !existingIds.has(stream.channelId)
+      )
       return [...current, ...uniqueNew]
     })
   }
@@ -229,7 +262,8 @@ function AppClientContent() {
     let cancelled = false
 
     const refreshLiveStatuses = async () => {
-      const snapshot = projectsRef.current.find((project) => project.id === activeProjectId)?.livestreams ?? []
+      const snapshot =
+        projectsRef.current.find((project) => project.id === activeProjectId)?.livestreams ?? []
 
       const refreshed = await Promise.all(
         snapshot.map(async (stream) => {
@@ -270,7 +304,7 @@ function AppClientContent() {
   const createBlankProject = () => {
     const project: LiveGridProject = {
       id: createId(),
-      name: `${t("app.newProject")} ${projects.length + 1}`,
+      name: `${t('app.newProject')} ${projects.length + 1}`,
       createdAt: new Date().toISOString(),
       livestreams: []
     }
@@ -286,10 +320,10 @@ function AppClientContent() {
       const streams: Livestream[] = []
       for (const channel of preset.channels) {
         try {
-          const stream = await createLivestream(channel, "")
+          const stream = await createLivestream(channel, '')
           streams.push(stream)
         } catch (error) {
-          console.error("Failed to import preset channel:", channel, error)
+          console.error('Failed to import preset channel:', channel, error)
         }
       }
 
@@ -307,7 +341,7 @@ function AppClientContent() {
     }
   }
 
-  const localeShort = locale === "pt-BR" ? "PT" : locale.split("-")[0].toUpperCase()
+  const localeShort = locale === 'pt-BR' ? 'PT' : locale.split('-')[0].toUpperCase()
 
   const isWelcomeMode = !activeProject
 
@@ -316,8 +350,8 @@ function AppClientContent() {
       <header className="bg-black border-b border-gray-800 px-3 py-2 flex items-center justify-between min-h-16">
         <img
           src="/livegrid-logo.svg"
-          alt={t("app.title")}
-          className="h-12 w-auto bg-transparent border-0 shadow-none"
+          alt={t('app.title')}
+          className="h-7 md:h-12 w-auto bg-transparent border-0 shadow-none"
         />
         <div className="flex items-center gap-2">
           {!isWelcomeMode && (
@@ -327,14 +361,14 @@ function AppClientContent() {
                   variant="ghost"
                   size="icon"
                   onClick={() => setActiveProjectId(null)}
-                  aria-label={t("app.projects")}
-                  title={t("app.projects")}
+                  aria-label={t('app.projects')}
+                  title={t('app.projects')}
                   className="bg-gray-900 border border-gray-700 text-gray-100 hover:bg-gray-800 hover:text-gray-100"
                 >
                   <House className="size-4" />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>{t("app.projects")}</TooltipContent>
+              <TooltipContent>{t('app.projects')}</TooltipContent>
             </Tooltip>
           )}
 
@@ -345,8 +379,8 @@ function AppClientContent() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  aria-label={t("input.addChannel")}
-                  title={t("input.addChannel")}
+                  aria-label={t('input.addChannel')}
+                  title={t('input.addChannel')}
                   className="bg-gray-900 border border-gray-700 text-gray-100 hover:bg-gray-800 hover:text-gray-100"
                 >
                   <CirclePlus className="size-4" />
@@ -362,14 +396,14 @@ function AppClientContent() {
                   <Button
                     variant="ghost"
                     size="icon"
-                    aria-label={t("app.language")}
+                    aria-label={t('app.language')}
                     className="bg-gray-900 border border-gray-700 text-gray-100 hover:bg-gray-800 hover:text-gray-100"
                   >
                     <span className="text-xs font-semibold">{localeShort}</span>
                   </Button>
                 </PopoverTrigger>
               </TooltipTrigger>
-              <TooltipContent>{t("app.language")}</TooltipContent>
+              <TooltipContent>{t('app.language')}</TooltipContent>
             </Tooltip>
             <PopoverContent align="end" className="w-56 bg-gray-900 border-gray-700 p-1">
               <div className="max-h-72 overflow-auto">
@@ -379,7 +413,9 @@ function AppClientContent() {
                     type="button"
                     onClick={() => setLocale(option)}
                     className={`w-full text-left px-3 py-2 rounded text-sm transition flex items-center justify-between ${
-                      option === locale ? "bg-gray-800 text-white" : "text-gray-300 hover:bg-gray-800/60"
+                      option === locale
+                        ? 'bg-gray-800 text-white'
+                        : 'text-gray-300 hover:bg-gray-800/60'
                     }`}
                   >
                     <span>{localeLabels[option]}</span>
@@ -396,13 +432,13 @@ function AppClientContent() {
                 variant="ghost"
                 size="icon"
                 onClick={() => setIsAboutOpen(true)}
-                aria-label={t("app.about")}
+                aria-label={t('app.about')}
                 className="bg-gray-900 border border-gray-700 text-gray-100 hover:bg-gray-800 hover:text-gray-100"
               >
                 <Info className="size-4" />
               </Button>
             </TooltipTrigger>
-            <TooltipContent>{t("app.about")}</TooltipContent>
+            <TooltipContent>{t('app.about')}</TooltipContent>
           </Tooltip>
         </div>
       </header>
@@ -410,16 +446,16 @@ function AppClientContent() {
       <main className="flex-1 overflow-hidden relative">
         {isWelcomeMode ? (
           <WelcomeScreen
-            title={t("welcome.title")}
-            subtitle={t("welcome.subtitle")}
-            createLabel={t("welcome.create")}
-            projectsTitle={t("welcome.projects")}
-            openProjectLabel={t("welcome.openProject")}
-            noProjectsLabel={t("welcome.noProjects")}
-            channelsLabel={t("welcome.channels")}
-            presetsTitle={t("welcome.presets")}
-            importLabel={t("welcome.importPreset")}
-            importingLabel={t("welcome.importing")}
+            title={t('welcome.title')}
+            subtitle={t('welcome.subtitle')}
+            createLabel={t('welcome.create')}
+            projectsTitle={t('welcome.projects')}
+            openProjectLabel={t('welcome.openProject')}
+            noProjectsLabel={t('welcome.noProjects')}
+            channelsLabel={t('welcome.channels')}
+            presetsTitle={t('welcome.presets')}
+            importLabel={t('welcome.importPreset')}
+            importingLabel={t('welcome.importing')}
             presets={LIVEGRID_PRESETS}
             projects={projectPreviews}
             loadingPresetId={isImportingPresetId}
@@ -438,7 +474,9 @@ function AppClientContent() {
         {!isWelcomeMode && (!isHydrated || activeLivestreams.length === 0) && (
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
             <div className="text-center">
-              <p className="text-gray-500 text-lg">{isHydrated ? t("app.empty") : t("app.loading")}</p>
+              <p className="text-gray-500 text-lg">
+                {isHydrated ? t('app.empty') : t('app.loading')}
+              </p>
             </div>
           </div>
         )}
