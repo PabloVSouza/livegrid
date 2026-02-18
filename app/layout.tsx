@@ -2,8 +2,8 @@ import type { Metadata, Viewport } from 'next'
 import 'react-grid-layout/css/styles.css'
 import 'react-resizable/css/styles.css'
 import './globals.css'
-import { TooltipProvider } from '@/components/ui/tooltip'
-import { QueryProvider } from '@/components/QueryProvider'
+import { QueryProvider } from '@components/QueryProvider'
+import { TooltipProvider } from '@ui/tooltip'
 
 export const metadata: Metadata = {
   title: 'LiveGrid by Pablo Souza',

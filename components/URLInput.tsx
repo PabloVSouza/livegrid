@@ -2,9 +2,9 @@
 
 import type { FC, ReactNode } from "react"
 import { useState } from "react"
-import { useI18n } from "./i18n"
-import { Button } from "@/components/ui/button"
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { useI18n } from "@components/i18n"
+import { Button } from "@ui/button"
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@ui/dialog"
 import { parse as parseYaml } from "yaml"
 
 interface URLInputProps {

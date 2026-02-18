@@ -1,7 +1,7 @@
 'use client'
 
 import type { FC } from 'react'
-import { useI18n } from './i18n'
+import { useI18n } from '@components/i18n'
 
 interface AboutModalProps {
   isOpen: boolean

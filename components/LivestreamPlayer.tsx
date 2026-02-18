@@ -2,8 +2,8 @@
 
 import { useEffect, useId, useRef, useState } from 'react'
 import type { FC } from 'react'
-import type { Livestream, LivestreamSource } from './types'
-import { useI18n } from './i18n'
+import { useI18n } from '@components/i18n'
+import type { Livestream, LivestreamSource } from '@components/types'
 import { RotateCw, Volume2, VolumeX } from 'lucide-react'
 import {
   AlertDialog,
@@ -14,7 +14,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle
-} from '@/components/ui/alert-dialog'
+} from '@ui/alert-dialog'
 
 type TwitchPlayerApi = {
   setMuted: (value: boolean) => void

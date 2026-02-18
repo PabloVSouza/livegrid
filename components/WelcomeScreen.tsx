@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from "react"
 import type { FC } from "react"
-import { Button } from "@/components/ui/button"
-import type { PresetDefinition } from "@/data/presets"
+import type { PresetDefinition } from "@data/presets"
+import { Button } from "@ui/button"
 import { Info, Pencil, Trash2 } from "lucide-react"
 import {
   AlertDialog,
@@ -14,8 +14,8 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+} from "@ui/alert-dialog"
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@ui/dialog"
 
 interface ChannelPreview {
   title: string
