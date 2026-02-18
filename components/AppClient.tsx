@@ -1154,6 +1154,23 @@ function AppClientContent() {
                   </Button>
                 }
               />
+              {!!activeProject && activeLivestreams.length > 0 && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={openShareDialog}
+                      aria-label={t('app.share')}
+                      title={t('app.share')}
+                      className="text-gray-100 hover:bg-gray-800 hover:text-gray-100"
+                    >
+                      <Share2 className="size-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>{t('app.share')}</TooltipContent>
+                </Tooltip>
+              )}
             </div>
           )}
           </div>
@@ -1194,24 +1211,6 @@ function AppClientContent() {
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>{t('app.importShared')}</TooltipContent>
-              </Tooltip>
-            )}
-
-            {!isWelcomeMode && !!activeProject && activeLivestreams.length > 0 && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={openShareDialog}
-                    aria-label={t('app.share')}
-                    title={t('app.share')}
-                    className="bg-gray-900 border border-gray-700 text-gray-100 hover:bg-gray-800 hover:text-gray-100"
-                  >
-                    <Share2 className="size-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>{t('app.share')}</TooltipContent>
               </Tooltip>
             )}
 
@@ -1314,6 +1313,18 @@ function AppClientContent() {
                 </Button>
               }
             />
+            {!!activeProject && activeLivestreams.length > 0 && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={openShareDialog}
+                aria-label={t('app.share')}
+                title={t('app.share')}
+                className="h-6 w-6 text-gray-100 hover:bg-gray-800 hover:text-gray-100"
+              >
+                <Share2 className="size-3.5" />
+              </Button>
+            )}
           </div>
         )}
       </header>
