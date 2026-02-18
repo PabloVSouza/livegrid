@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import QRCode from 'qrcode'
 import { URLInput } from './URLInput'
 import { LivestreamGrid } from './LivestreamGrid'
@@ -215,6 +216,91 @@ const sourceBatchKey = (
 ): string => {
   const channel = source.channelId || fallbackTitleFromUrl(source.channelUrl)
   return `${source.platform}:${channel.toLowerCase()}`
+}
+
+const fetchLiveStatusesBatchRequest = async (
+  sources: LivestreamSource[]
+): Promise<Map<string, LiveCheckResult>> => {
+  const uniqueByKey = new Map<string, LivestreamSource>()
+  for (const source of sources) {
+    uniqueByKey.set(sourceBatchKey(source), source)
+  }
+  if (uniqueByKey.size === 0) {
+    return new Map()
+  }
+
+  const response = await fetch('/api/live-status-batch', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      sources: Array.from(uniqueByKey.entries()).map(([key, source]) => ({
+        key,
+        platform: source.platform,
+        channelId: source.channelId,
+        channelUrl: source.channelUrl
+      }))
+    })
+  })
+
+  const data = (await response.json()) as {
+    results?: Array<{
+      key: string
+      live?: boolean
+      videoId?: string
+      consentRequired?: boolean
+      uncertain?: boolean
+    }>
+  }
+
+  if (!response.ok || !Array.isArray(data.results)) {
+    throw new Error('Failed to check live status batch')
+  }
+
+  const resultMap = new Map<string, LiveCheckResult>()
+  for (const item of data.results) {
+    resultMap.set(item.key, {
+      isLive: Boolean(item.live),
+      videoId: item.videoId,
+      consentRequired: item.consentRequired,
+      uncertain: item.uncertain
+    })
+  }
+  return resultMap
+}
+
+const resolveChannelsBatchRequest = async (
+  urls: string[]
+): Promise<Map<string, { channelId: string; title?: string }>> => {
+  if (urls.length === 0) return new Map()
+
+  const response = await fetch('/api/resolve-channel-batch', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ urls })
+  })
+  const data = (await response.json()) as {
+    results?: Array<{
+      url: string
+      normalizedUrl?: string
+      ok: boolean
+      channelId?: string
+      title?: string
+    }>
+  }
+
+  if (!response.ok || !Array.isArray(data.results)) {
+    throw new Error('Failed to resolve channels batch')
+  }
+
+  const map = new Map<string, { channelId: string; title?: string }>()
+  for (const item of data.results) {
+    if (!item.ok || !item.channelId) continue
+    map.set(item.url, { channelId: item.channelId, title: item.title })
+    if (item.normalizedUrl) {
+      map.set(item.normalizedUrl, { channelId: item.channelId, title: item.title })
+    }
+  }
+  return map
 }
 
 const normalizeIdentity = (value: string): string =>
@@ -552,100 +638,26 @@ function AppClientContent() {
   const isSharedPreviewMode = !activeProject && !!sharedPreview
   const currentProjectName = activeProject?.name ?? sharedPreview?.name ?? ''
   const activeLivestreams = activeProject?.livestreams ?? sharedPreview?.livestreams ?? []
+  const resolveChannelsBatchMutation = useMutation({
+    mutationFn: resolveChannelsBatchRequest
+  })
+  const fetchLiveStatusesBatchMutation = useMutation({
+    mutationFn: fetchLiveStatusesBatchRequest
+  })
 
-  const fetchLiveStatusesBatch = async (
-    sources: LivestreamSource[]
-  ): Promise<Map<string, LiveCheckResult>> => {
-    const uniqueByKey = new Map<string, LivestreamSource>()
-    for (const source of sources) {
-      uniqueByKey.set(sourceBatchKey(source), source)
+  const liveStatusSourceEntries = useMemo(() => {
+    const unique = new Map<string, LivestreamSource>()
+    for (const stream of activeLivestreams) {
+      const normalized = normalizeLivestream(stream)
+      for (const source of normalized.sources ?? []) {
+        unique.set(sourceBatchKey(source), source)
+      }
     }
-    if (uniqueByKey.size === 0) {
-      return new Map()
-    }
 
-    try {
-      const response = await fetch('/api/live-status-batch', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          sources: Array.from(uniqueByKey.entries()).map(([key, source]) => ({
-            key,
-            platform: source.platform,
-            channelId: source.channelId,
-            channelUrl: source.channelUrl
-          }))
-        })
-      })
-
-      const data = (await response.json()) as {
-        results?: Array<{
-          key: string
-          live?: boolean
-          videoId?: string
-          consentRequired?: boolean
-          uncertain?: boolean
-        }>
-      }
-
-      if (!response.ok || !Array.isArray(data.results)) {
-        throw new Error('Failed to check live status batch')
-      }
-
-      const resultMap = new Map<string, LiveCheckResult>()
-      for (const item of data.results) {
-        resultMap.set(item.key, {
-          isLive: Boolean(item.live),
-          videoId: item.videoId,
-          consentRequired: item.consentRequired,
-          uncertain: item.uncertain
-        })
-      }
-      return resultMap
-    } catch (error) {
-      console.warn('Live status batch check inconclusive:', error)
-      return new Map()
-    }
-  }
-
-  const resolveChannelsBatch = async (
-    urls: string[]
-  ): Promise<Map<string, { channelId: string; title?: string }>> => {
-    if (urls.length === 0) return new Map()
-    try {
-      const response = await fetch('/api/resolve-channel-batch', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ urls })
-      })
-      const data = (await response.json()) as {
-        results?: Array<{
-          url: string
-          normalizedUrl?: string
-          ok: boolean
-          channelId?: string
-          title?: string
-        }>
-      }
-
-      if (!response.ok || !Array.isArray(data.results)) {
-        throw new Error('Failed to resolve channels batch')
-      }
-
-      const map = new Map<string, { channelId: string; title?: string }>()
-      for (const item of data.results) {
-        if (!item.ok || !item.channelId) continue
-        map.set(item.url, { channelId: item.channelId, title: item.title })
-        if (item.normalizedUrl) {
-          map.set(item.normalizedUrl, { channelId: item.channelId, title: item.title })
-        }
-      }
-      return map
-    } catch (error) {
-      console.warn('Resolve channels batch failed:', error)
-      return new Map()
-    }
-  }
+    return Array.from(unique.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([key, source]) => ({ key, source }))
+  }, [activeLivestreams])
 
   const parseEntriesToSources = (entries: AddChannelRequest[]): ParsedSourceRef[] => {
     const parsed: ParsedSourceRef[] = []
@@ -675,7 +687,12 @@ function AppClientContent() {
         parsedRefs.filter((item) => item.platform === 'youtube').map((item) => item.normalizedUrl)
       )
     )
-    const resolvedYoutube = await resolveChannelsBatch(youtubeUrls)
+    let resolvedYoutube = new Map<string, { channelId: string; title?: string }>()
+    try {
+      resolvedYoutube = await resolveChannelsBatchMutation.mutateAsync(youtubeUrls)
+    } catch (error) {
+      console.warn('Resolve channels batch failed:', error)
+    }
 
     const sourceRefsByEntry = new Map<number, LivestreamSource[]>()
     const resolvedTitleByEntry = new Map<number, string>()
@@ -711,7 +728,12 @@ function AppClientContent() {
     }
 
     const allSources = Array.from(sourceRefsByEntry.values()).flat()
-    const liveByKey = await fetchLiveStatusesBatch(allSources)
+    let liveByKey = new Map<string, LiveCheckResult>()
+    try {
+      liveByKey = await fetchLiveStatusesBatchMutation.mutateAsync(allSources)
+    } catch (error) {
+      console.warn('Live status batch check inconclusive:', error)
+    }
 
     const created: Livestream[] = []
     for (let entryIndex = 0; entryIndex < entries.length; entryIndex += 1) {
@@ -960,101 +982,85 @@ function AppClientContent() {
     setIsRenameOpen(false)
   }
 
+  const liveStatusesQuery = useQuery({
+    queryKey: [
+      'live-status-batch',
+      activeProjectId ?? 'shared',
+      liveStatusSourceEntries.map((entry) => entry.key)
+    ],
+    queryFn: async () => {
+      const sources = liveStatusSourceEntries.map((entry) => entry.source)
+      return fetchLiveStatusesBatchRequest(sources)
+    },
+    enabled: isHydrated && activeLivestreams.length > 0 && liveStatusSourceEntries.length > 0,
+    refetchInterval: REFRESH_INTERVAL_MS,
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true
+  })
+
   useEffect(() => {
-    if (!isHydrated || activeLivestreams.length === 0) return
+    const liveByKey = liveStatusesQuery.data
+    if (!liveByKey) return
 
-    let cancelled = false
+    const snapshot = activeProjectId
+      ? projectsRef.current.find((project) => project.id === activeProjectId)?.livestreams ?? []
+      : sharedPreviewRef.current?.livestreams ?? []
+    if (snapshot.length === 0) return
 
-    const refreshLiveStatuses = async () => {
-      const snapshot = activeProjectId
-        ? projectsRef.current.find((project) => project.id === activeProjectId)?.livestreams ?? []
-        : sharedPreviewRef.current?.livestreams ?? []
-      if (snapshot.length === 0) return
-      const allSources = snapshot.flatMap((stream) => normalizeLivestream(stream).sources ?? [])
-      const liveByKey = await fetchLiveStatusesBatch(allSources)
+    const refreshed = snapshot.map((stream) => {
+      const normalized = normalizeLivestream(stream)
+      const currentSources = normalized.sources ?? []
+      const refreshedSources = currentSources.map((source) => {
+        const result = liveByKey.get(sourceBatchKey(source))
+        if (!result || result.uncertain) {
+          return source
+        }
+        if (source.platform === 'youtube') {
+          return {
+            ...source,
+            videoId: result.videoId ?? undefined,
+            consentRequired: result.consentRequired,
+            isLive: result.isLive
+          }
+        }
+        return {
+          ...source,
+          videoId: undefined,
+          consentRequired: false,
+          isLive: result.isLive
+        }
+      })
+      const previousActive = refreshedSources.find((source) => source.sourceId === normalized.activeSourceId)
+      const activeId =
+        previousActive?.isLive
+          ? previousActive.sourceId
+          : refreshedSources.find((source) => source.isLive)?.sourceId || normalized.activeSourceId
 
-      const refreshed = await Promise.all(
-        snapshot.map(async (stream) => {
-          const normalized = normalizeLivestream(stream)
-          const currentSources = normalized.sources ?? []
-          const refreshedSources = currentSources.map((source) => {
-            const result = liveByKey.get(sourceBatchKey(source))
-            if (!result || result.uncertain) {
-              return source
-            }
-            if (source.platform === 'youtube') {
-              return {
-                ...source,
-                videoId: result.videoId ?? undefined,
-                consentRequired: result.consentRequired,
-                isLive: result.isLive
-              }
-            }
-            return {
-              ...source,
-              videoId: undefined,
-              consentRequired: false,
-              isLive: result.isLive
-            }
-          })
-          const previousActive = refreshedSources.find(
-            (source) => source.sourceId === normalized.activeSourceId
-          )
-          const activeId = previousActive?.isLive
-            ? previousActive.sourceId
-            : refreshedSources.find((source) => source.isLive)?.sourceId ||
-              normalized.activeSourceId
+      return rebuildLivestreamWithSources(normalized, refreshedSources, activeId)
+    })
 
-          return rebuildLivestreamWithSources(normalized, refreshedSources, activeId)
+    const refreshedById = new Map(refreshed.map((stream) => [stream.id, stream]))
+    if (activeProjectId) {
+      setProjects((prev) =>
+        prev.map((project) => {
+          if (project.id !== activeProjectId) return project
+          return {
+            ...project,
+            livestreams: project.livestreams.map((stream) => refreshedById.get(stream.id) ?? stream)
+          }
         })
       )
-
-      if (cancelled) return
-
-      const refreshedById = new Map(refreshed.map((stream) => [stream.id, stream]))
-      if (activeProjectId) {
-        setProjects((prev) =>
-          prev.map((project) => {
-            if (project.id !== activeProjectId) return project
-            return {
-              ...project,
-              livestreams: project.livestreams.map((stream) => refreshedById.get(stream.id) ?? stream)
+    } else {
+      setSharedPreview((prev) =>
+        prev
+          ? {
+              ...prev,
+              livestreams: prev.livestreams.map((stream) => refreshedById.get(stream.id) ?? stream)
             }
-          })
-        )
-      } else {
-        setSharedPreview((prev) =>
-          prev
-            ? {
-                ...prev,
-                livestreams: prev.livestreams.map((stream) => refreshedById.get(stream.id) ?? stream)
-              }
-            : prev
-        )
-      }
+          : prev
+      )
     }
-
-    void refreshLiveStatuses()
-    const handleVisibilityOrFocus = () => {
-      if (document.visibilityState === 'visible') {
-        void refreshLiveStatuses()
-      }
-    }
-
-    window.addEventListener('focus', handleVisibilityOrFocus)
-    document.addEventListener('visibilitychange', handleVisibilityOrFocus)
-
-    const intervalId = window.setInterval(() => {
-      void refreshLiveStatuses()
-    }, REFRESH_INTERVAL_MS)
-
-    return () => {
-      cancelled = true
-      window.removeEventListener('focus', handleVisibilityOrFocus)
-      document.removeEventListener('visibilitychange', handleVisibilityOrFocus)
-      window.clearInterval(intervalId)
-    }
-  }, [activeProjectId, activeLivestreams.length, isHydrated])
+  }, [activeProjectId, liveStatusesQuery.data])
 
   const createBlankProject = () => {
     const project: LiveGridProject = {

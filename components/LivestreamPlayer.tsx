@@ -1,10 +1,10 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import type { FC } from 'react'
 import type { Livestream, LivestreamSource } from './types'
 import { useI18n } from './i18n'
-import { Volume2, VolumeX } from 'lucide-react'
+import { RotateCw, Volume2, VolumeX } from 'lucide-react'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -15,6 +15,63 @@ import {
   AlertDialogHeader,
   AlertDialogTitle
 } from '@/components/ui/alert-dialog'
+
+type TwitchPlayerApi = {
+  setMuted: (value: boolean) => void
+  play: () => void
+  destroy: () => void
+}
+
+type TwitchPlayerCtor = new (
+  element: string | HTMLElement,
+  options: {
+    channel?: string
+    parent: string[]
+    width: string
+    height: string
+    autoplay?: boolean
+    muted?: boolean
+  }
+) => TwitchPlayerApi
+
+type TwitchGlobal = {
+  Player: TwitchPlayerCtor
+}
+
+declare global {
+  interface Window {
+    Twitch?: TwitchGlobal
+  }
+}
+
+let twitchSdkPromise: Promise<void> | null = null
+
+const loadTwitchSdk = (): Promise<void> => {
+  if (typeof window === 'undefined') return Promise.resolve()
+  if (window.Twitch?.Player) return Promise.resolve()
+  if (twitchSdkPromise) return twitchSdkPromise
+
+  twitchSdkPromise = new Promise<void>((resolve, reject) => {
+    const existing = document.getElementById('twitch-embed-sdk')
+    if (existing) {
+      existing.addEventListener('load', () => resolve(), { once: true })
+      existing.addEventListener('error', () => reject(new Error('Failed to load Twitch SDK')), {
+        once: true
+      })
+      return
+    }
+
+    const script = document.createElement('script')
+    script.id = 'twitch-embed-sdk'
+    script.src = 'https://player.twitch.tv/js/embed/v1.js'
+    script.async = true
+    script.onload = () => resolve()
+    script.onerror = () => reject(new Error('Failed to load Twitch SDK'))
+    document.head.appendChild(script)
+  })
+
+  return twitchSdkPromise
+}
 
 interface LivestreamPlayerProps {
   stream: Livestream
@@ -40,7 +97,14 @@ export const LivestreamPlayer: FC<LivestreamPlayerProps> = ({ stream, onRemove, 
   const [twitchParentHost, setTwitchParentHost] = useState('localhost')
   const [isMuted, setIsMuted] = useState(true)
   const [youtubeOrigin, setYoutubeOrigin] = useState('')
+  const [reloadNonce, setReloadNonce] = useState(0)
   const iframeRef = useRef<HTMLIFrameElement | null>(null)
+  const twitchContainerRef = useRef<HTMLDivElement | null>(null)
+  const twitchPlayerRef = useRef<TwitchPlayerApi | null>(null)
+  const twitchHasStartedRef = useRef(false)
+  const twitchPlayAttemptsRef = useRef(0)
+  const lastYoutubeResumeAttemptRef = useRef(0)
+  const twitchContainerId = useId().replace(/:/g, '_')
 
   const sources: LivestreamSource[] =
     stream.sources && stream.sources.length > 0
@@ -59,7 +123,8 @@ export const LivestreamPlayer: FC<LivestreamPlayerProps> = ({ stream, onRemove, 
   const activeSource =
     sources.find((source) => source.sourceId === stream.activeSourceId) || sources[0]
   const platform = activeSource.platform
-  const canFallbackByUnknownStatus = activeSource.isLive !== false
+  const canFallbackByUnknownStatus =
+    platform === 'youtube' ? activeSource.isLive !== false : true
   const youtubeParams = new URLSearchParams({
     autoplay: '1',
     controls: '0',
@@ -84,7 +149,7 @@ export const LivestreamPlayer: FC<LivestreamPlayerProps> = ({ stream, onRemove, 
         : null
       : platform === 'twitch'
         ? canFallbackByUnknownStatus && activeSource.channelId
-          ? `https://player.twitch.tv/?channel=${encodeURIComponent(activeSource.channelId)}&parent=${encodeURIComponent(twitchParentHost)}&autoplay=true&muted=${isMuted ? 'true' : 'false'}`
+          ? `https://player.twitch.tv/?channel=${encodeURIComponent(activeSource.channelId)}&parent=${encodeURIComponent(twitchParentHost)}&autoplay=true&muted=true`
           : null
         : canFallbackByUnknownStatus && activeSource.channelId
           ? `https://player.kick.com/${encodeURIComponent(activeSource.channelId)}?autoplay=true&muted=${isMuted ? 'true' : 'false'}`
@@ -98,22 +163,233 @@ export const LivestreamPlayer: FC<LivestreamPlayerProps> = ({ stream, onRemove, 
   }, [])
 
   useEffect(() => {
-    const iframeWindow = iframeRef.current?.contentWindow
-    if (!iframeWindow || platform !== 'youtube' || !activeSource.videoId) return
+    if (platform !== 'twitch' || !embedUrl || !activeSource.channelId || !twitchParentHost) {
+      return
+    }
 
+    let cancelled = false
+
+    const createPlayer = async () => {
+      try {
+        await loadTwitchSdk()
+        if (cancelled || !window.Twitch?.Player) return
+
+        twitchPlayerRef.current?.destroy()
+        twitchPlayerRef.current = null
+
+        const target = twitchContainerRef.current ?? twitchContainerId
+        const player = new window.Twitch.Player(target, {
+          channel: activeSource.channelId,
+          parent: [twitchParentHost],
+          width: '100%',
+          height: '100%',
+          autoplay: true,
+          muted: true
+        })
+        twitchPlayerRef.current = player
+        twitchHasStartedRef.current = false
+        twitchPlayAttemptsRef.current = 0
+
+        // Nudge playback after SDK setup; some browsers require explicit play call.
+        window.setTimeout(() => {
+          if (cancelled || twitchPlayerRef.current !== player) return
+          try {
+            player.play()
+            player.setMuted(isMuted)
+            twitchPlayAttemptsRef.current += 1
+          } catch {
+            // no-op
+          }
+        }, 250)
+
+        // Track whether playback actually started at least once.
+        try {
+          ;(player as unknown as { addEventListener?: (event: string, cb: () => void) => void })
+            .addEventListener?.('PLAY', () => {
+              twitchHasStartedRef.current = true
+              twitchPlayAttemptsRef.current = 0
+            })
+        } catch {
+          // no-op
+        }
+      } catch {
+        // fallback stays as iframe rendering path
+      }
+    }
+
+    void createPlayer()
+
+    return () => {
+      cancelled = true
+      twitchPlayerRef.current?.destroy()
+      twitchPlayerRef.current = null
+      twitchHasStartedRef.current = false
+      twitchPlayAttemptsRef.current = 0
+    }
+  }, [platform, embedUrl, activeSource.channelId, twitchParentHost, twitchContainerId])
+
+  const postYoutubeCommand = (func: string, args: unknown[] = []): void => {
+    const iframeWindow = iframeRef.current?.contentWindow
+    if (!iframeWindow || platform !== 'youtube' || !embedUrl) return
     iframeWindow.postMessage(
       JSON.stringify({
         event: 'command',
-        func: isMuted ? 'mute' : 'unMute',
-        args: []
+        func,
+        args
       }),
       '*'
     )
-  }, [platform, activeSource.videoId, isMuted])
+  }
+
+  const tryResumeYoutubePlayback = (): void => {
+    const now = Date.now()
+    if (now - lastYoutubeResumeAttemptRef.current < 4000) return
+    lastYoutubeResumeAttemptRef.current = now
+    postYoutubeCommand('playVideo')
+  }
+
+  useEffect(() => {
+    if (platform !== 'youtube' || !embedUrl) return
+    postYoutubeCommand(isMuted ? 'mute' : 'unMute')
+  }, [platform, embedUrl, isMuted])
+
+  useEffect(() => {
+    if (platform !== 'twitch') return
+    const player = twitchPlayerRef.current
+    if (!player) return
+    try {
+      player.setMuted(isMuted)
+    } catch {
+      // no-op
+    }
+  }, [platform, isMuted])
+
+  useEffect(() => {
+    if (platform !== 'twitch' || !embedUrl) return
+
+    const intervalId = window.setInterval(() => {
+      const player = twitchPlayerRef.current
+      if (!player || twitchHasStartedRef.current) return
+      if (twitchPlayAttemptsRef.current >= 8) return
+      try {
+        player.setMuted(true)
+        player.play()
+        twitchPlayAttemptsRef.current += 1
+      } catch {
+        // no-op
+      }
+    }, 1500)
+
+    return () => {
+      window.clearInterval(intervalId)
+    }
+  }, [platform, embedUrl])
+
+  useEffect(() => {
+    if (platform !== 'youtube' || !embedUrl) return
+
+    const handleMessage = (event: MessageEvent) => {
+      if (event.source !== iframeRef.current?.contentWindow) return
+      if (typeof event.data !== 'string') return
+
+      let payload: { event?: string; info?: number } | null = null
+      try {
+        payload = JSON.parse(event.data) as { event?: string; info?: number }
+      } catch {
+        return
+      }
+
+      if (!payload) return
+
+      if (payload.event === 'onReady') {
+        postYoutubeCommand(isMuted ? 'mute' : 'unMute')
+        tryResumeYoutubePlayback()
+      }
+
+      if (payload.event === 'onStateChange' && payload.info === 2) {
+        tryResumeYoutubePlayback()
+      }
+    }
+
+    window.addEventListener('message', handleMessage)
+    return () => {
+      window.removeEventListener('message', handleMessage)
+    }
+  }, [platform, embedUrl, isMuted])
+
+  useEffect(() => {
+    if (platform !== 'youtube' || !embedUrl) return
+    const intervalId = window.setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        tryResumeYoutubePlayback()
+      }
+    }, 20000)
+
+    return () => {
+      window.clearInterval(intervalId)
+    }
+  }, [platform, embedUrl])
 
   const toggleMute = (): void => {
     if (!embedUrl) return
-    setIsMuted((prev) => !prev)
+    if (platform === 'twitch') {
+      const player = twitchPlayerRef.current
+      if (!twitchHasStartedRef.current) {
+        // Before first successful play, click acts as "recover/play" to avoid no-op mute toggles.
+        setIsMuted(true)
+        if (!player) {
+          setReloadNonce((prev) => prev + 1)
+          return
+        }
+        try {
+          player.setMuted(true)
+          player.play()
+          twitchPlayAttemptsRef.current += 1
+        } catch {
+          // no-op
+        }
+        window.setTimeout(() => {
+          try {
+            player.play()
+            twitchPlayAttemptsRef.current += 1
+          } catch {
+            // no-op
+          }
+        }, 300)
+        return
+      }
+
+      const nextMuted = !isMuted
+      setIsMuted(nextMuted)
+      try {
+        player?.setMuted(nextMuted)
+        player?.play()
+      } catch {
+        // no-op
+      }
+      return
+    }
+
+    const nextMuted = !isMuted
+    setIsMuted(nextMuted)
+  }
+
+  const recoverPlayback = (): void => {
+    if (!embedUrl) return
+    if (platform === 'youtube') {
+      tryResumeYoutubePlayback()
+      return
+    }
+    if (platform === 'twitch') {
+      try {
+        twitchPlayerRef.current?.play()
+        twitchPlayerRef.current?.setMuted(isMuted)
+        return
+      } catch {
+        // fallback to reload below
+      }
+    }
+    setReloadNonce((prev) => prev + 1)
   }
 
   return (
@@ -178,17 +454,34 @@ export const LivestreamPlayer: FC<LivestreamPlayerProps> = ({ stream, onRemove, 
       <div className="flex-1 bg-black relative">
         <div className="player-live-content w-full h-full">
           {embedUrl ? (
-            <iframe
-              key={`${platform}:${activeSource.sourceId}`}
-              ref={iframeRef}
-              src={embedUrl}
-              className="w-full h-full pointer-events-none"
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
-              allowFullScreen
-              title={stream.title}
-              referrerPolicy="strict-origin-when-cross-origin"
-              tabIndex={-1}
-            />
+            platform === 'twitch' ? (
+              <div
+                key={`${platform}:${activeSource.sourceId}:${reloadNonce}`}
+                id={twitchContainerId}
+                ref={twitchContainerRef}
+                className="w-full h-full"
+              />
+            ) : (
+              <iframe
+                key={`${platform}:${activeSource.sourceId}:${reloadNonce}`}
+                ref={iframeRef}
+                src={embedUrl}
+                className="w-full h-full pointer-events-none"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
+                allowFullScreen
+                title={stream.title}
+                referrerPolicy="strict-origin-when-cross-origin"
+                tabIndex={-1}
+                onLoad={() => {
+                  if (platform === 'youtube') {
+                    postYoutubeCommand('addEventListener', ['onReady'])
+                    postYoutubeCommand('addEventListener', ['onStateChange'])
+                    postYoutubeCommand(isMuted ? 'mute' : 'unMute')
+                    tryResumeYoutubePlayback()
+                  }
+                }}
+              />
+            )
           ) : platform === 'youtube' && activeSource.consentRequired ? (
             <div className="w-full h-full flex flex-col items-center justify-center text-yellow-600 bg-gray-950">
               <svg className="w-12 h-12 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -214,17 +507,66 @@ export const LivestreamPlayer: FC<LivestreamPlayerProps> = ({ stream, onRemove, 
           )}
         </div>
         {embedUrl ? (
-          <button
-            type="button"
-            onClick={toggleMute}
-            className="absolute inset-0 z-10 cursor-pointer bg-transparent no-drag group"
-            title={isMuted ? 'Unmute' : 'Mute'}
-            aria-label={isMuted ? 'Unmute stream' : 'Mute stream'}
-          >
-            <span className="pointer-events-none absolute top-2 right-2 opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 rounded-full border border-gray-600/80 bg-black/55 p-1.5 text-gray-100 backdrop-blur-sm transition-opacity duration-150">
-              {isMuted ? <VolumeX className="h-3.5 w-3.5" /> : <Volume2 className="h-3.5 w-3.5" />}
-            </span>
-          </button>
+          platform === 'twitch' ? (
+            <div className="absolute inset-0 z-10 pointer-events-none group">
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation()
+                  toggleMute()
+                }}
+                className="no-drag pointer-events-auto absolute top-2 right-2 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 rounded-full border border-gray-600/80 bg-black/55 p-1.5 text-gray-100 backdrop-blur-sm transition-opacity duration-150"
+                title={isMuted ? 'Unmute' : 'Mute'}
+                aria-label={isMuted ? 'Unmute stream' : 'Mute stream'}
+              >
+                {isMuted ? <VolumeX className="h-3.5 w-3.5" /> : <Volume2 className="h-3.5 w-3.5" />}
+              </button>
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation()
+                  recoverPlayback()
+                }}
+                className="no-drag pointer-events-auto absolute top-2 left-2 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 rounded-full border border-gray-600/80 bg-black/55 p-1.5 text-gray-100 backdrop-blur-sm transition-opacity duration-150"
+                title="Recover playback"
+                aria-label="Recover playback"
+              >
+                <RotateCw className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={toggleMute}
+              className="absolute inset-0 z-10 cursor-pointer bg-transparent no-drag group"
+              title={isMuted ? 'Unmute' : 'Mute'}
+              aria-label={isMuted ? 'Unmute stream' : 'Mute stream'}
+            >
+              <span className="pointer-events-none absolute top-2 right-2 opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 rounded-full border border-gray-600/80 bg-black/55 p-1.5 text-gray-100 backdrop-blur-sm transition-opacity duration-150">
+                {isMuted ? <VolumeX className="h-3.5 w-3.5" /> : <Volume2 className="h-3.5 w-3.5" />}
+              </span>
+              <span
+                role="button"
+                tabIndex={0}
+                onClick={(event) => {
+                  event.stopPropagation()
+                  recoverPlayback()
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault()
+                    event.stopPropagation()
+                    recoverPlayback()
+                  }
+                }}
+                className="absolute top-2 left-2 opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 rounded-full border border-gray-600/80 bg-black/55 p-1.5 text-gray-100 backdrop-blur-sm transition-opacity duration-150"
+                title="Recover playback"
+                aria-label="Recover playback"
+              >
+                <RotateCw className="h-3.5 w-3.5" />
+              </span>
+            </button>
+          )
         ) : null}
         <div className="player-dummy-content absolute inset-0 hidden items-center justify-center bg-gray-950 text-gray-400 text-xs font-medium tracking-wide">
           {t('player.adjusting')}

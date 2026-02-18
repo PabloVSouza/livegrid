@@ -3,6 +3,7 @@ import 'react-grid-layout/css/styles.css'
 import 'react-resizable/css/styles.css'
 import './globals.css'
 import { TooltipProvider } from '@/components/ui/tooltip'
+import { QueryProvider } from '@/components/QueryProvider'
 
 export const metadata: Metadata = {
   title: 'LiveGrid by Pablo Souza',
@@ -26,7 +27,9 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="en">
       <body>
-        <TooltipProvider>{children}</TooltipProvider>
+        <QueryProvider>
+          <TooltipProvider>{children}</TooltipProvider>
+        </QueryProvider>
       </body>
     </html>
   )
