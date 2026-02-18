@@ -649,6 +649,12 @@ function AppClientContent() {
 
   const localeShort = locale === 'pt-BR' ? 'PT' : locale.split('-')[0].toUpperCase()
   const isWelcomeMode = !activeProject && !sharedPreview
+  const loadingOverlayMessage = useMemo(() => {
+    if (!isHydrated) return t('app.loadingStartup')
+    if (isLoadingSharedPreview) return t('app.loadingSharedPreset')
+    if (isImportingPresetId) return t('app.loadingImportPreset')
+    return null
+  }, [isHydrated, isLoadingSharedPreview, isImportingPresetId, t])
 
   return (
     <div className="w-screen h-screen bg-black text-white flex flex-col">
@@ -718,6 +724,23 @@ function AppClientContent() {
                   <TooltipContent>{t('app.share')}</TooltipContent>
                 </Tooltip>
               )}
+              {isSharedPreviewMode && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={importSharedPreview}
+                      aria-label={t('app.importShared')}
+                      title={t('app.importShared')}
+                      className="text-gray-100 hover:bg-gray-800 hover:text-gray-100"
+                    >
+                      <Download className="size-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>{t('app.importShared')}</TooltipContent>
+                </Tooltip>
+              )}
             </div>
           )}
           </div>
@@ -740,24 +763,6 @@ function AppClientContent() {
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>{t('app.projects')}</TooltipContent>
-              </Tooltip>
-            )}
-
-            {isSharedPreviewMode && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={importSharedPreview}
-                    aria-label={t('app.importShared')}
-                    title={t('app.importShared')}
-                    className="bg-gray-900 border border-gray-700 text-gray-100 hover:bg-gray-800 hover:text-gray-100"
-                  >
-                    <Download className="size-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>{t('app.importShared')}</TooltipContent>
               </Tooltip>
             )}
 
@@ -872,6 +877,18 @@ function AppClientContent() {
                 <Share2 className="size-3.5" />
               </Button>
             )}
+            {isSharedPreviewMode && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={importSharedPreview}
+                aria-label={t('app.importShared')}
+                title={t('app.importShared')}
+                className="h-6 w-6 text-gray-100 hover:bg-gray-800 hover:text-gray-100"
+              >
+                <Download className="size-3.5" />
+              </Button>
+            )}
           </div>
         )}
       </header>
@@ -913,16 +930,31 @@ function AppClientContent() {
           />
         )}
 
-        {!isWelcomeMode && (isLoadingSharedPreview || !isHydrated || activeLivestreams.length === 0) && (
+        {!isWelcomeMode && !loadingOverlayMessage && activeLivestreams.length === 0 && (
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
             <div className="text-center">
               <p className="text-gray-500 text-lg">
-                {isLoadingSharedPreview || !isHydrated ? t('app.loading') : t('app.empty')}
+                {t('app.empty')}
               </p>
             </div>
           </div>
         )}
       </main>
+
+      {loadingOverlayMessage && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center">
+          <div className="flex flex-col items-center gap-4 px-6 py-5 rounded-xl border border-gray-700 bg-gray-950/95">
+            <div className="relative h-10 w-10">
+              <div className="absolute inset-0 rounded-full border-2 border-blue-500/25" />
+              <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-blue-400 animate-spin" />
+            </div>
+            <p className="text-sm sm:text-base font-semibold text-gray-100 text-center">
+              {loadingOverlayMessage}
+            </p>
+            <p className="text-xs text-gray-400 text-center">{t('app.loading')}</p>
+          </div>
+        </div>
+      )}
 
       <AboutModal isOpen={isAboutOpen} onClose={() => setIsAboutOpen(false)} />
       <Dialog open={isRenameOpen} onOpenChange={setIsRenameOpen}>

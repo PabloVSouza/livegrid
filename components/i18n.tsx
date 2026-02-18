@@ -66,6 +66,9 @@ type TranslationKey =
   | 'welcome.importing'
   | 'app.empty'
   | 'app.loading'
+  | 'app.loadingStartup'
+  | 'app.loadingSharedPreset'
+  | 'app.loadingImportPreset'
   | 'about.title'
   | 'about.description'
   | 'about.developer'
@@ -127,6 +130,9 @@ const messages: Record<Locale, Partial<Record<TranslationKey, string>>> = {
     'welcome.importing': 'Importing...',
     'app.empty': 'Add your first livestream to get started',
     'app.loading': 'Loading channels...',
+    'app.loadingStartup': 'Preparing LiveGrid...',
+    'app.loadingSharedPreset': 'Opening shared preset...',
+    'app.loadingImportPreset': 'Importing preset project...',
     'about.title': 'About LiveGrid',
     'about.description':
       'LiveGrid is a livestream monitor to watch multiple YouTube, Twitch, and Kick channels in a single dynamic grid.',
@@ -189,6 +195,9 @@ const messages: Record<Locale, Partial<Record<TranslationKey, string>>> = {
     'welcome.importing': 'Importando...',
     'app.empty': 'Adicione sua primeira live para começar',
     'app.loading': 'Carregando canais...',
+    'app.loadingStartup': 'Preparando o LiveGrid...',
+    'app.loadingSharedPreset': 'Abrindo preset compartilhado...',
+    'app.loadingImportPreset': 'Importando projeto do preset...',
     'about.title': 'Sobre o LiveGrid',
     'about.description':
       'LiveGrid é um monitor de lives para assistir múltiplos canais do YouTube, Twitch e Kick em um único grid com layout dinâmico.',
