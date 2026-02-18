@@ -1,8 +1,19 @@
 'use client'
 
+import { useState } from 'react'
 import type { FC } from 'react'
 import type { Livestream } from './types'
 import { useI18n } from './i18n'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle
+} from '@/components/ui/alert-dialog'
 
 interface LivestreamPlayerProps {
   stream: Livestream
@@ -11,6 +22,7 @@ interface LivestreamPlayerProps {
 
 export const LivestreamPlayer: FC<LivestreamPlayerProps> = ({ stream, onRemove }) => {
   const { t } = useI18n()
+  const [isConfirmOpen, setIsConfirmOpen] = useState(false)
   const embedUrl = stream.videoId
     ? `https://www.youtube.com/embed/${stream.videoId}?autoplay=1&controls=1&mute=1`
     : null
@@ -30,12 +42,12 @@ export const LivestreamPlayer: FC<LivestreamPlayerProps> = ({ stream, onRemove }
           </div>
         </div>
         <button
-          onClick={onRemove}
-          className="ml-1 p-1 hover:bg-gray-700 transition text-gray-400 hover:text-red-400 shrink-0"
+          onClick={() => setIsConfirmOpen(true)}
+          className="no-drag ml-1 h-7 w-7 md:h-6 md:w-6 flex items-center justify-center rounded hover:bg-gray-700 transition text-gray-300 hover:text-red-400 shrink-0 touch-manipulation"
           title={t('player.remove')}
           aria-label={t('player.remove')}
         >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-4 h-4 md:w-3.5 md:h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -82,6 +94,30 @@ export const LivestreamPlayer: FC<LivestreamPlayerProps> = ({ stream, onRemove }
           {t('player.adjusting')}
         </div>
       </div>
+      <AlertDialog open={isConfirmOpen} onOpenChange={setIsConfirmOpen}>
+        <AlertDialogContent className="bg-gray-900 border-gray-700 text-white">
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('player.remove')}</AlertDialogTitle>
+            <AlertDialogDescription className="text-gray-300">
+              {t('player.removeConfirm')}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="bg-gray-800 border-gray-700 text-gray-100 hover:bg-gray-700 hover:text-gray-100">
+              {t('input.cancel')}
+            </AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 text-white hover:bg-red-700"
+              onClick={() => {
+                onRemove()
+                setIsConfirmOpen(false)
+              }}
+            >
+              {t('player.remove')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

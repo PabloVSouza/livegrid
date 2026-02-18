@@ -75,6 +75,7 @@ type TranslationKey =
   | 'input.addChannels'
   | 'input.cancel'
   | 'player.remove'
+  | 'player.removeConfirm'
   | 'player.notStreaming'
   | 'player.consentRequired'
   | 'player.waiting'
@@ -126,6 +127,7 @@ const messages: Record<Locale, Partial<Record<TranslationKey, string>>> = {
     'input.addChannels': 'Add Channels',
     'input.cancel': 'Cancel',
     'player.remove': 'Remove stream',
+    'player.removeConfirm': 'Remove this stream from the grid?',
     'player.notStreaming': 'Channel not streaming right now',
     'player.consentRequired': 'Consent Required',
     'player.waiting': 'Waiting for this channel to go live',
@@ -177,6 +179,7 @@ const messages: Record<Locale, Partial<Record<TranslationKey, string>>> = {
     'input.addChannels': 'Adicionar Canais',
     'input.cancel': 'Cancelar',
     'player.remove': 'Remover stream',
+    'player.removeConfirm': 'Remover este stream do grid?',
     'player.notStreaming': 'Canal não está transmitindo agora',
     'player.consentRequired': 'Consentimento Obrigatório',
     'player.waiting': 'Aguardando este canal entrar ao vivo',
