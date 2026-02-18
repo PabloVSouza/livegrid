@@ -27,10 +27,10 @@ const getSourceDisplayName = (source: LivestreamSource): string => {
   return `${platform}: ${channel}`
 }
 
-const platformShortLabel = (platform: LivestreamSource['platform']): string => {
-  if (platform === 'youtube') return 'YT'
-  if (platform === 'twitch') return 'TW'
-  return 'KI'
+const getPlatformIconSrc = (platform: LivestreamSource['platform']): string => {
+  if (platform === 'youtube') return '/platforms/youtube.svg'
+  if (platform === 'twitch') return '/platforms/twitch.svg'
+  return '/platforms/kick.svg'
 }
 
 export const LivestreamPlayer: FC<LivestreamPlayerProps> = ({ stream, onRemove, onSelectSource }) => {
@@ -104,8 +104,13 @@ export const LivestreamPlayer: FC<LivestreamPlayerProps> = ({ stream, onRemove, 
                       : 'bg-gray-800 border-gray-700 text-gray-300 hover:bg-gray-700'
                   }`}
                 >
-                  <span className={source.isLive ? 'text-red-400' : 'text-gray-500'}>●</span>{' '}
-                  {platformShortLabel(source.platform)}
+                  <span className={source.isLive ? 'text-red-400' : 'text-gray-500'}>●</span>
+                  <img
+                    src={getPlatformIconSrc(source.platform)}
+                    alt={source.platform}
+                    className="inline-block ml-1 h-3.5 w-3.5 align-middle"
+                    draggable={false}
+                  />
                 </button>
               )
             })}

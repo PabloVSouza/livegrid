@@ -21,7 +21,7 @@ export const LIVEGRID_PRESETS: PresetDefinition[] = [
       { title: 'ACF', sources: ['@acfperformance'] },
       { title: 'Rato Borrachudo', sources: ['@ratoborrachudo', 'kick:ratoborrachudokick'] },
       { title: 'Tonimek', sources: ['@Tonimek'] },
-      { title: 'Lives do gORDOx [OFICIAL]', sources: ['@livesdogordox'] },
+      { title: 'Lives do gORDOx [OFICIAL]', sources: ['@livesdogordox', 'twitch:gordox'] },
       { title: 'INVERNO NA TRANSAMAZÔNICA', sources: ['@INVERNONATRANSAMAZÔNICA'] },
       { title: 'Renato Cariani', sources: ['@renatocariani'] },
       { title: 'Richard Rasmussen', sources: ['@RichardRasmussenSelvagem'] }
