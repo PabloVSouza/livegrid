@@ -19,6 +19,7 @@ interface LayoutItem {
 interface Props {
   livestreams: Livestream[]
   onRemove: (id: string) => void
+  onSelectSource: (livestreamId: string, sourceId: string) => void
   layoutStorageKey: string
 }
 
@@ -476,7 +477,7 @@ const buildEvenLayout = (streams: Livestream[], metrics: GridMetrics): LayoutIte
   return placed
 }
 
-export const LivestreamGrid: FC<Props> = ({ livestreams, onRemove, layoutStorageKey }) => {
+export const LivestreamGrid: FC<Props> = ({ livestreams, onRemove, onSelectSource, layoutStorageKey }) => {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const [gridSize, setGridSize] = useState({
     // Keep first render deterministic between SSR and client hydration.
@@ -489,6 +490,7 @@ export const LivestreamGrid: FC<Props> = ({ livestreams, onRemove, layoutStorage
   const [manualLayout, setManualLayout] = useState<LayoutItem[] | null>(null)
   const lastValidLayoutRef = useRef<LayoutItem[] | null>(null)
   const resizeRejectedRef = useRef(false)
+  const resizeGrewRef = useRef(false)
   const interactionItemIdRef = useRef<string | null>(null)
   const [interactionMode, setInteractionMode] = useState<"idle" | "drag" | "resize">("idle")
   const modeLayoutStorageKey = `${layoutStorageKey}_${gridSize.width < 768 ? "mobile" : "desktop"}`
@@ -566,7 +568,8 @@ export const LivestreamGrid: FC<Props> = ({ livestreams, onRemove, layoutStorage
   const commitLayout = (
     layoutArg: unknown,
     mode: "drag" | "resize",
-    prioritizedId?: string | null
+    prioritizedId?: string | null,
+    resizeGrew = false
   ) => {
     if (!isInteractingRef.current) return
     isInteractingRef.current = false
@@ -578,19 +581,36 @@ export const LivestreamGrid: FC<Props> = ({ livestreams, onRemove, layoutStorage
     const streamIds = new Set(livestreams.map((stream) => stream.id))
     const activeId = prioritizedId ?? interactionItemIdRef.current
     const nextUnpacked =
-      mode === "resize" && activeId
+      mode === "resize"
         ? (() => {
-            const active = layoutItems.find((item) => item.i === activeId)
-            if (!active) {
-              return normalizeLayout(layoutItems, streamIds, metrics, activeId)
+            // Keep the exact resize result if it still fits and doesn't overlap.
+            const direct = sanitizeLayoutFromGrid(layoutItems, streamIds, metrics)
+            if (!hasOutOfBounds(direct, metrics) && !hasOverlap(direct)) {
+              return direct
             }
-            return buildLayoutAroundPinned(livestreams, defaultLayout, metrics, active)
+
+            // If the item was reduced, do not trigger automatic reflow.
+            if (!resizeGrew) {
+              return direct
+            }
+
+            // Only reflow when resize made layout invalid (same rule as viewport resize).
+            if (activeId) {
+              const active = layoutItems.find((item) => item.i === activeId)
+              if (active) {
+                return buildLayoutAroundPinned(livestreams, defaultLayout, metrics, active)
+              }
+            }
+
+            return repairLayoutToVisible(direct, streamIds, metrics, activeId)
           })()
-        : mode === "resize"
-          ? normalizeLayout(layoutItems, streamIds, metrics, activeId)
-          : sanitizeLayoutFromGrid(layoutItems, streamIds, metrics)
+        : sanitizeLayoutFromGrid(layoutItems, streamIds, metrics)
     let next = metrics.isMobile ? packMobileNoGaps(nextUnpacked, streamIds) : nextUnpacked
     if (mode === "drag" && (hasOutOfBounds(next, metrics) || hasOverlap(next))) {
+      const repaired = repairLayoutToVisible(next, streamIds, metrics, activeId)
+      next = metrics.isMobile ? packMobileNoGaps(repaired, streamIds) : repaired
+    }
+    if (mode === "resize" && resizeGrew && (hasOutOfBounds(next, metrics) || hasOverlap(next))) {
       const repaired = repairLayoutToVisible(next, streamIds, metrics, activeId)
       next = metrics.isMobile ? packMobileNoGaps(repaired, streamIds) : repaired
     }
@@ -631,6 +651,7 @@ export const LivestreamGrid: FC<Props> = ({ livestreams, onRemove, layoutStorage
     onInteractionStart()
     setInteractionMode("resize")
     resizeRejectedRef.current = false
+    resizeGrewRef.current = false
     if (newItemArg && typeof newItemArg === "object") {
       interactionItemIdRef.current = (newItemArg as LayoutItem).i ?? null
     } else if (oldItemArg && typeof oldItemArg === "object") {
@@ -643,9 +664,12 @@ export const LivestreamGrid: FC<Props> = ({ livestreams, onRemove, layoutStorage
 
   const onResize = (layoutArg: unknown, oldItemArg: unknown, newItemArg: unknown) => {
     void layoutArg
-    void oldItemArg
-    if (!newItemArg || typeof newItemArg !== "object") return
+    if (!newItemArg || typeof newItemArg !== "object" || !oldItemArg || typeof oldItemArg !== "object") return
     const resized = newItemArg as LayoutItem
+    const oldItem = oldItemArg as LayoutItem
+    if (resized.w > oldItem.w || resized.h > oldItem.h || resized.w * resized.h > oldItem.w * oldItem.h) {
+      resizeGrewRef.current = true
+    }
     interactionItemIdRef.current = resized.i ?? null
     const valid = canResizeFitAll(resized)
     if (!valid) {
@@ -678,7 +702,7 @@ export const LivestreamGrid: FC<Props> = ({ livestreams, onRemove, layoutStorage
       }
       return
     }
-    commitLayout(layoutArg, "resize", prioritizedId)
+    commitLayout(layoutArg, "resize", prioritizedId, resizeGrewRef.current)
   }
 
   return (
@@ -773,7 +797,11 @@ export const LivestreamGrid: FC<Props> = ({ livestreams, onRemove, layoutStorage
       >
         {livestreams.map((stream) => (
           <div key={stream.id} className="flex flex-col h-full overflow-hidden bg-black">
-            <LivestreamPlayer stream={stream} onRemove={() => onRemove(stream.id)} />
+            <LivestreamPlayer
+              stream={stream}
+              onRemove={() => onRemove(stream.id)}
+              onSelectSource={(sourceId) => onSelectSource(stream.id, sourceId)}
+            />
           </div>
         ))}
       </GridLayout>

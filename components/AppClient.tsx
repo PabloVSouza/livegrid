@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { URLInput } from './URLInput'
 import { LivestreamGrid } from './LivestreamGrid'
-import type { Livestream } from './types'
+import type { Livestream, LivestreamSource, StreamPlatform } from './types'
 import { I18nProvider, localeLabels, useI18n } from './i18n'
 import { AboutModal } from './AboutModal'
 import { WelcomeScreen } from './WelcomeScreen'
@@ -19,6 +19,7 @@ const LEGACY_STREAMS_KEY = 'youtube_livestreams'
 const REFRESH_INTERVAL_MS = 60_000
 
 type StoredLivestream = Omit<Livestream, 'videoId'>
+type AddChannelRequest = { title: string; sources: string[] }
 
 interface LiveGridProject {
   id: string
@@ -39,14 +40,244 @@ const createId = (): string =>
     ? crypto.randomUUID()
     : `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 
+interface ParsedStreamInput {
+  platform: StreamPlatform
+  channelRef: string
+  normalizedUrl: string
+}
+
+interface LiveCheckResult {
+  videoId?: string | undefined | null
+  consentRequired?: boolean
+  isLive: boolean
+}
+
+const parseStreamInput = (input: string): ParsedStreamInput | null => {
+  const raw = input.trim()
+  if (!raw) return null
+
+  const twitchPrefixed = raw.match(/^twitch:([a-zA-Z0-9_]{3,30})$/i)
+  if (twitchPrefixed?.[1]) {
+    const channel = twitchPrefixed[1].toLowerCase()
+    return {
+      platform: 'twitch',
+      channelRef: channel,
+      normalizedUrl: `https://www.twitch.tv/${channel}`
+    }
+  }
+
+  const kickPrefixed = raw.match(/^kick:([a-zA-Z0-9_-]{3,40})$/i)
+  if (kickPrefixed?.[1]) {
+    const channel = kickPrefixed[1].toLowerCase()
+    return {
+      platform: 'kick',
+      channelRef: channel,
+      normalizedUrl: `https://kick.com/${channel}`
+    }
+  }
+
+  const twitchUrl = raw.match(/^https?:\/\/(?:www\.)?twitch\.tv\/([a-zA-Z0-9_]{3,30})(?:[/?#].*)?$/i)
+  if (twitchUrl?.[1]) {
+    const channel = twitchUrl[1].toLowerCase()
+    return {
+      platform: 'twitch',
+      channelRef: channel,
+      normalizedUrl: `https://www.twitch.tv/${channel}`
+    }
+  }
+
+  const kickUrl = raw.match(/^https?:\/\/(?:www\.)?kick\.com\/([a-zA-Z0-9_-]{3,40})(?:[/?#].*)?$/i)
+  if (kickUrl?.[1]) {
+    const channel = kickUrl[1].toLowerCase()
+    return {
+      platform: 'kick',
+      channelRef: channel,
+      normalizedUrl: `https://kick.com/${channel}`
+    }
+  }
+
+  return {
+    platform: 'youtube',
+    channelRef: raw,
+    normalizedUrl: raw
+  }
+}
+
 const fallbackTitleFromUrl = (url: string): string => {
   const atMatch = url.match(/@([a-zA-Z0-9_-]+)/)
   if (atMatch?.[1]) return atMatch[1]
+
+  const twitchMatch = url.match(/twitch\.tv\/([a-zA-Z0-9_]+)/i)
+  if (twitchMatch?.[1]) return twitchMatch[1]
+
+  const kickMatch = url.match(/kick\.com\/([a-zA-Z0-9_-]+)/i)
+  if (kickMatch?.[1]) return kickMatch[1]
 
   const channelMatch = url.match(/\/(channel|c)\/([a-zA-Z0-9_-]+)/)
   if (channelMatch?.[2]) return channelMatch[2]
 
   return 'Channel'
+}
+
+const sourceLabel = (source: Pick<LivestreamSource, 'platform' | 'channelId' | 'channelUrl'>): string => {
+  const platform = source.platform
+  const channel = source.channelId || fallbackTitleFromUrl(source.channelUrl)
+  return `${platform}:${channel.toLowerCase()}`
+}
+
+const normalizeIdentity = (value: string): string =>
+  value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '')
+
+const stripCommonSuffixes = (value: string): string[] => {
+  const variants = new Set<string>([value])
+  const suffixes = ['kick', 'twitch', 'youtube', 'yt', 'live', 'oficial', 'official']
+
+  for (const suffix of suffixes) {
+    if (value.endsWith(suffix) && value.length > suffix.length + 2) {
+      variants.add(value.slice(0, -suffix.length))
+    }
+  }
+
+  return Array.from(variants).filter(Boolean)
+}
+
+const streamIdentityKeys = (stream: Livestream): Set<string> => {
+  const normalized = normalizeLivestream(stream)
+  const keys = new Set<string>()
+
+  const candidates = new Set<string>([normalized.title])
+  for (const source of normalized.sources ?? []) {
+    if (source.channelId) candidates.add(source.channelId)
+    candidates.add(fallbackTitleFromUrl(source.channelUrl))
+    candidates.add(source.channelUrl)
+  }
+
+  for (const candidate of candidates) {
+    const base = normalizeIdentity(candidate)
+    if (!base) continue
+    for (const variant of stripCommonSuffixes(base)) {
+      keys.add(variant)
+    }
+  }
+
+  return keys
+}
+
+const hasStreamIdentityOverlap = (a: Livestream, b: Livestream): boolean => {
+  const aKeys = streamIdentityKeys(a)
+  const bKeys = streamIdentityKeys(b)
+  for (const key of aKeys) {
+    if (bKeys.has(key)) return true
+  }
+  return false
+}
+
+const mergeLivestreamPair = (existing: Livestream, incoming: Livestream): Livestream => {
+  const existingSources = normalizeLivestream(existing).sources ?? []
+  const incomingSources = normalizeLivestream(incoming).sources ?? []
+  const mergedByLabel = new Map<string, LivestreamSource>()
+  for (const source of [...existingSources, ...incomingSources]) {
+    mergedByLabel.set(sourceLabel(source), source)
+  }
+  return rebuildLivestreamWithSources(
+    existing,
+    Array.from(mergedByLabel.values()),
+    existing.activeSourceId
+  )
+}
+
+const mergeLivestreamList = (streams: Livestream[]): Livestream[] => {
+  const merged: Livestream[] = []
+
+  for (const stream of streams) {
+    const normalized = normalizeLivestream(stream)
+    const existingIndex = merged.findIndex((candidate) => hasStreamIdentityOverlap(candidate, normalized))
+    if (existingIndex === -1) {
+      merged.push(normalized)
+      continue
+    }
+    merged[existingIndex] = mergeLivestreamPair(merged[existingIndex], normalized)
+  }
+
+  return merged
+}
+
+const toSource = (stream: Livestream): LivestreamSource => ({
+  sourceId: stream.activeSourceId || createId(),
+  platform: stream.platform ?? 'youtube',
+  channelUrl: stream.channelUrl,
+  channelId: stream.channelId,
+  videoId: stream.videoId,
+  consentRequired: stream.consentRequired,
+  isLive: stream.isLive
+})
+
+const normalizeLivestream = (stream: Livestream): Livestream => {
+  const legacySource = toSource(stream)
+  const byLabel = new Map<string, LivestreamSource>()
+
+  const allSources = [legacySource, ...(stream.sources ?? [])]
+  for (const source of allSources) {
+    const normalized: LivestreamSource = {
+      sourceId: source.sourceId || createId(),
+      platform: source.platform,
+      channelUrl: source.channelUrl,
+      channelId: source.channelId,
+      videoId: source.videoId,
+      consentRequired: source.consentRequired,
+      isLive: source.isLive
+    }
+    byLabel.set(sourceLabel(normalized), normalized)
+  }
+
+  const sources = Array.from(byLabel.values())
+  const activeSource =
+    sources.find((source) => source.sourceId === stream.activeSourceId) || sources[0] || legacySource
+
+  return {
+    ...stream,
+    platform: activeSource.platform,
+    channelUrl: activeSource.channelUrl,
+    channelId: activeSource.channelId,
+    videoId: activeSource.videoId,
+    consentRequired: activeSource.consentRequired,
+    isLive: activeSource.isLive,
+    activeSourceId: activeSource.sourceId,
+    sources
+  }
+}
+
+const rebuildLivestreamWithSources = (
+  stream: Livestream,
+  sources: LivestreamSource[],
+  preferredSourceId?: string
+): Livestream => {
+  const normalizedSources = sources.map((source) => ({
+    ...source,
+    sourceId: source.sourceId || createId()
+  }))
+  const activeSource =
+    normalizedSources.find((source) => source.sourceId === preferredSourceId) ||
+    normalizedSources.find((source) => source.isLive) ||
+    normalizedSources[0]
+
+  if (!activeSource) return stream
+
+  return normalizeLivestream({
+    ...stream,
+    activeSourceId: activeSource.sourceId,
+    platform: activeSource.platform,
+    channelUrl: activeSource.channelUrl,
+    channelId: activeSource.channelId,
+    videoId: activeSource.videoId,
+    consentRequired: activeSource.consentRequired,
+    isLive: activeSource.isLive,
+    sources: normalizedSources
+  })
 }
 
 const deserializeProjects = (raw: string | null): LiveGridProject[] => {
@@ -62,9 +293,21 @@ const deserializeProjects = (raw: string | null): LiveGridProject[] => {
         id: project.id,
         name: project.name,
         createdAt: project.createdAt || new Date().toISOString(),
-        livestreams: Array.isArray(project.livestreams)
-          ? project.livestreams.map((stream) => ({ ...stream, videoId: undefined }))
-          : []
+        livestreams: mergeLivestreamList(
+          Array.isArray(project.livestreams)
+            ? project.livestreams.map((stream) =>
+                normalizeLivestream({
+                  ...stream,
+                  platform: stream.platform ?? 'youtube',
+                  videoId: undefined,
+                  sources: stream.sources?.map((source) => ({
+                    ...source,
+                    videoId: undefined
+                  }))
+                })
+              )
+            : []
+        )
       }))
   } catch {
     return []
@@ -76,7 +319,10 @@ const serializeProjects = (projects: LiveGridProject[]): StoredProject[] =>
     id: project.id,
     name: project.name,
     createdAt: project.createdAt,
-    livestreams: project.livestreams.map(({ videoId: _videoId, ...stored }) => stored)
+    livestreams: project.livestreams.map(({ videoId: _videoId, sources, ...stored }) => ({
+      ...stored,
+      sources: sources?.map(({ videoId: _sourceVideoId, ...sourceStored }) => sourceStored)
+    }))
   }))
 
 function AppClientContent() {
@@ -121,7 +367,9 @@ function AppClientContent() {
               id: createId(),
               name: 'Migrated Project',
               createdAt: new Date().toISOString(),
-              livestreams: legacy.map((stream) => ({ ...stream, videoId: undefined }))
+              livestreams: legacy.map((stream) =>
+                normalizeLivestream({ ...stream, videoId: undefined })
+              )
             }
             setProjects([migratedProject])
             setActiveProjectId(migratedProject.id)
@@ -186,9 +434,7 @@ function AppClientContent() {
     return { channelId: data.channelId, title: data.title }
   }
 
-  const fetchCurrentLiveVideoId = async (
-    channelId: string
-  ): Promise<{ videoId?: string | undefined | null; consentRequired?: boolean }> => {
+  const fetchCurrentLiveVideoId = async (channelId: string): Promise<LiveCheckResult> => {
     try {
       const response = await fetch(`/api/channel-live?channelId=${encodeURIComponent(channelId)}`)
       const data = (await response.json()) as {
@@ -202,31 +448,142 @@ function AppClientContent() {
         throw new Error(data.error || 'Failed to check channel live status')
       }
       if (data.consentRequired) {
-        return { videoId: undefined, consentRequired: true }
+        return { videoId: undefined, consentRequired: true, isLive: false }
       }
       if (data.uncertain) {
-        return { videoId: null }
+        return { videoId: null, isLive: false }
       }
-      return { videoId: data.live ? data.videoId : undefined }
+      return { videoId: data.live ? data.videoId : undefined, isLive: Boolean(data.live && data.videoId) }
     } catch (error) {
       console.warn('Live status check inconclusive:', channelId, error)
-      return { videoId: null }
+      return { videoId: null, isLive: false }
     }
   }
 
-  const createLivestream = async (channelUrl: string, title: string): Promise<Livestream> => {
-    const resolved = await resolveChannel(channelUrl)
-    const resolvedTitle = title.trim() || resolved.title || fallbackTitleFromUrl(channelUrl)
-    const liveResult = await fetchCurrentLiveVideoId(resolved.channelId)
+  const fetchPlatformLiveStatus = async (
+    platform: Exclude<StreamPlatform, 'youtube'>,
+    channelRef: string
+  ): Promise<LiveCheckResult> => {
+    try {
+      const response = await fetch(
+        `/api/platform-live?platform=${encodeURIComponent(platform)}&channel=${encodeURIComponent(channelRef)}`
+      )
+      const data = (await response.json()) as {
+        live?: boolean
+        uncertain?: boolean
+        error?: string
+      }
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to check channel live status')
+      }
+      if (data.uncertain) {
+        return { videoId: null, isLive: false }
+      }
+      return { isLive: Boolean(data.live) }
+    } catch (error) {
+      console.warn('Live status check inconclusive:', platform, channelRef, error)
+      return { videoId: null, isLive: false }
+    }
+  }
+
+  const checkSourceLive = async (source: LivestreamSource): Promise<LivestreamSource> => {
+    if (source.platform === 'youtube') {
+      if (!source.channelId) return { ...source, isLive: false, videoId: undefined }
+      const liveResult = await fetchCurrentLiveVideoId(source.channelId)
+      if (liveResult.videoId === null) {
+        return source
+      }
+      return {
+        ...source,
+        videoId: liveResult.videoId,
+        consentRequired: liveResult.consentRequired,
+        isLive: liveResult.isLive
+      }
+    }
+
+    const channelRef = source.channelId || fallbackTitleFromUrl(source.channelUrl)
+    const result = await fetchPlatformLiveStatus(source.platform, channelRef)
+    if (result.videoId === null) return source
+    return {
+      ...source,
+      videoId: undefined,
+      consentRequired: false,
+      isLive: result.isLive
+    }
+  }
+
+  const createSource = async (
+    channelUrl: string
+  ): Promise<{ source: LivestreamSource; resolvedTitle?: string }> => {
+    const parsed = parseStreamInput(channelUrl)
+    if (!parsed) {
+      throw new Error('Invalid channel input')
+    }
+
+    if (parsed.platform === 'youtube') {
+      const resolved = await resolveChannel(parsed.normalizedUrl)
+      const liveResult = await fetchCurrentLiveVideoId(resolved.channelId)
+
+      return {
+        resolvedTitle: resolved.title,
+        source: {
+          sourceId: createId(),
+          platform: 'youtube',
+          channelUrl: parsed.normalizedUrl,
+          channelId: resolved.channelId,
+          videoId: liveResult.videoId ?? undefined,
+          consentRequired: liveResult.consentRequired,
+          isLive: liveResult.isLive
+        }
+      }
+    }
+
+    const liveResult = await fetchPlatformLiveStatus(parsed.platform, parsed.channelRef)
 
     return {
-      id: createId(),
-      channelUrl,
-      channelId: resolved.channelId,
-      title: resolvedTitle,
-      videoId: liveResult.videoId ?? undefined,
-      consentRequired: liveResult.consentRequired
+      source: {
+        sourceId: createId(),
+        platform: parsed.platform,
+        channelUrl: parsed.normalizedUrl,
+        channelId: parsed.channelRef,
+        isLive: liveResult.isLive
+      }
     }
+  }
+
+  const createLivestream = async (entry: AddChannelRequest): Promise<Livestream> => {
+    const refs = entry.sources.map((value) => value.trim()).filter(Boolean)
+    if (refs.length === 0) {
+      throw new Error('No channel source provided')
+    }
+
+    const builtSources: LivestreamSource[] = []
+    let resolvedTitle = entry.title.trim()
+
+    for (const ref of refs) {
+      const built = await createSource(ref)
+      if (!resolvedTitle && built.resolvedTitle) {
+        resolvedTitle = built.resolvedTitle
+      }
+      builtSources.push(built.source)
+    }
+
+    const firstSource = builtSources[0]
+    const initialTitle = resolvedTitle || fallbackTitleFromUrl(firstSource.channelUrl)
+    const liveFirst = builtSources.find((source) => source.isLive) || firstSource
+
+    return normalizeLivestream({
+      id: createId(),
+      title: initialTitle,
+      platform: liveFirst.platform,
+      channelUrl: liveFirst.channelUrl,
+      channelId: liveFirst.channelId,
+      videoId: liveFirst.videoId,
+      consentRequired: liveFirst.consentRequired,
+      isLive: liveFirst.isLive,
+      activeSourceId: liveFirst.sourceId,
+      sources: builtSources
+    })
   }
 
   const updateActiveProjectLivestreams = (updater: (current: Livestream[]) => Livestream[]) => {
@@ -240,29 +597,37 @@ function AppClientContent() {
     )
   }
 
-  const addLivestreams = async (entries: Array<{ channelUrl: string; title: string }>) => {
+  const addLivestreams = async (entries: AddChannelRequest[]) => {
     if (!activeProjectId) return
 
     const created: Livestream[] = []
 
     for (const entry of entries) {
       try {
-        const stream = await createLivestream(entry.channelUrl, entry.title)
+        const stream = await createLivestream(entry)
         created.push(stream)
       } catch (error) {
-        console.error('Failed to add channel:', entry.channelUrl, error)
+        console.error('Failed to add channel group:', entry, error)
       }
     }
 
     if (created.length === 0) return
 
     updateActiveProjectLivestreams((current) => {
-      const existingIds = new Set(current.map((stream) => stream.channelId))
-      const uniqueNew = created.filter(
-        (stream) => !stream.channelId || !existingIds.has(stream.channelId)
-      )
-      return [...current, ...uniqueNew]
+      return mergeLivestreamList([...current, ...created])
     })
+  }
+
+  const selectLivestreamSource = (livestreamId: string, sourceId: string) => {
+    updateActiveProjectLivestreams((current) =>
+      current.map((stream) => {
+        if (stream.id !== livestreamId) return stream
+        const normalized = normalizeLivestream(stream)
+        const selected = normalized.sources?.find((source) => source.sourceId === sourceId)
+        if (!selected) return stream
+        return rebuildLivestreamWithSources(normalized, normalized.sources ?? [], selected.sourceId)
+      })
+    )
   }
 
   const removeLivestream = (id: string) => {
@@ -287,19 +652,17 @@ function AppClientContent() {
 
       const refreshed = await Promise.all(
         snapshot.map(async (stream) => {
-          if (!stream.channelId) {
-            return stream
-          }
+          const normalized = normalizeLivestream(stream)
+          const currentSources = normalized.sources ?? []
+          const refreshedSources = await Promise.all(currentSources.map((source) => checkSourceLive(source)))
+          const previousActive = refreshedSources.find(
+            (source) => source.sourceId === normalized.activeSourceId
+          )
+          const activeId = previousActive?.isLive
+            ? previousActive.sourceId
+            : refreshedSources.find((source) => source.isLive)?.sourceId || normalized.activeSourceId
 
-          const liveResult = await fetchCurrentLiveVideoId(stream.channelId)
-          if (liveResult.videoId === null) {
-            return stream
-          }
-          return {
-            ...stream,
-            videoId: liveResult.videoId,
-            consentRequired: liveResult.consentRequired
-          }
+          return rebuildLivestreamWithSources(normalized, refreshedSources, activeId)
         })
       )
 
@@ -347,7 +710,7 @@ function AppClientContent() {
       const streams: Livestream[] = []
       for (const channel of preset.channels) {
         try {
-          const stream = await createLivestream(channel, '')
+          const stream = await createLivestream({ title: '', sources: [channel] })
           streams.push(stream)
         } catch (error) {
           console.error('Failed to import preset channel:', channel, error)
@@ -358,7 +721,7 @@ function AppClientContent() {
         id: createId(),
         name: preset.name,
         createdAt: new Date().toISOString(),
-        livestreams: streams
+        livestreams: mergeLivestreamList(streams)
       }
 
       setProjects((prev) => [project, ...prev])
@@ -500,6 +863,7 @@ function AppClientContent() {
           <LivestreamGrid
             livestreams={activeLivestreams}
             onRemove={removeLivestream}
+            onSelectSource={selectLivestreamSource}
             layoutStorageKey={`livegrid_layout_${activeProject.id}`}
           />
         )}

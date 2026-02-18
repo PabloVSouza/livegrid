@@ -16,6 +16,7 @@ export const LIVEGRID_PRESETS: PresetDefinition[] = [
     channels: [
       '@acfperformance',
       '@ratoborrachudo',
+      'kick:ratoborrachudokick',
       '@Tonimek',
       '@livesdogordox',
       '@INVERNONATRANSAMAZÔNICA',

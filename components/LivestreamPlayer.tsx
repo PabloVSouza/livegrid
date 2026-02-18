@@ -1,8 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { FC } from 'react'
-import type { Livestream } from './types'
+import type { Livestream, LivestreamSource } from './types'
 import { useI18n } from './i18n'
 import {
   AlertDialog,
@@ -18,14 +18,61 @@ import {
 interface LivestreamPlayerProps {
   stream: Livestream
   onRemove: () => void
+  onSelectSource: (sourceId: string) => void
 }
 
-export const LivestreamPlayer: FC<LivestreamPlayerProps> = ({ stream, onRemove }) => {
+const getSourceDisplayName = (source: LivestreamSource): string => {
+  const platform = source.platform.toUpperCase()
+  const channel = source.channelId || source.channelUrl
+  return `${platform}: ${channel}`
+}
+
+const platformShortLabel = (platform: LivestreamSource['platform']): string => {
+  if (platform === 'youtube') return 'YT'
+  if (platform === 'twitch') return 'TW'
+  return 'KI'
+}
+
+export const LivestreamPlayer: FC<LivestreamPlayerProps> = ({ stream, onRemove, onSelectSource }) => {
   const { t } = useI18n()
   const [isConfirmOpen, setIsConfirmOpen] = useState(false)
-  const embedUrl = stream.videoId
-    ? `https://www.youtube.com/embed/${stream.videoId}?autoplay=1&controls=1&mute=1`
-    : null
+  const [twitchParentHost, setTwitchParentHost] = useState('localhost')
+
+  const sources: LivestreamSource[] =
+    stream.sources && stream.sources.length > 0
+      ? stream.sources
+      : [
+          {
+            sourceId: stream.activeSourceId || `${stream.platform ?? 'youtube'}:${stream.channelId ?? stream.channelUrl}`,
+            platform: stream.platform ?? 'youtube',
+            channelUrl: stream.channelUrl,
+            channelId: stream.channelId,
+            videoId: stream.videoId,
+            consentRequired: stream.consentRequired,
+            isLive: stream.isLive
+          }
+        ]
+  const activeSource =
+    sources.find((source) => source.sourceId === stream.activeSourceId) || sources[0]
+  const platform = activeSource.platform
+  const embedUrl =
+    platform === 'youtube'
+      ? activeSource.videoId
+        ? `https://www.youtube.com/embed/${activeSource.videoId}?autoplay=1&controls=1&mute=1`
+        : null
+      : platform === 'twitch'
+        ? activeSource.channelId && activeSource.isLive
+          ? `https://player.twitch.tv/?channel=${encodeURIComponent(activeSource.channelId)}&parent=${encodeURIComponent(twitchParentHost)}&autoplay=true&muted=true`
+          : null
+        : activeSource.channelId && activeSource.isLive
+          ? `https://player.kick.com/${encodeURIComponent(activeSource.channelId)}?autoplay=true&muted=true`
+          : null
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.location.hostname) {
+      setTwitchParentHost(window.location.hostname)
+    }
+  }, [])
 
   return (
     <div className="flex flex-col h-full bg-black overflow-hidden border-r border-b border-gray-800">
@@ -41,6 +88,29 @@ export const LivestreamPlayer: FC<LivestreamPlayerProps> = ({ stream, onRemove }
             </h3>
           </div>
         </div>
+        {sources.length > 1 && (
+          <div className="no-drag ml-1 flex items-center gap-1">
+            {sources.map((source) => {
+              const isActive = source.sourceId === activeSource.sourceId
+              return (
+                <button
+                  key={source.sourceId}
+                  type="button"
+                  onClick={() => onSelectSource(source.sourceId)}
+                  title={`${t('player.source')}: ${getSourceDisplayName(source)}`}
+                  className={`h-5 min-w-7 px-1 rounded border text-[10px] font-semibold transition cursor-pointer ${
+                    isActive
+                      ? 'bg-blue-700/80 border-blue-500 text-white'
+                      : 'bg-gray-800 border-gray-700 text-gray-300 hover:bg-gray-700'
+                  }`}
+                >
+                  <span className={source.isLive ? 'text-red-400' : 'text-gray-500'}>●</span>{' '}
+                  {platformShortLabel(source.platform)}
+                </button>
+              )
+            })}
+          </div>
+        )}
         <button
           onClick={() => setIsConfirmOpen(true)}
           className="no-drag ml-1 h-7 w-7 md:h-6 md:w-6 flex items-center justify-center rounded hover:bg-gray-700 transition text-gray-300 hover:text-red-400 shrink-0 touch-manipulation"
@@ -60,7 +130,7 @@ export const LivestreamPlayer: FC<LivestreamPlayerProps> = ({ stream, onRemove }
 
       <div className="flex-1 bg-black relative">
         <div className="player-live-content w-full h-full">
-          {stream.consentRequired ? (
+          {platform === 'youtube' && activeSource.consentRequired ? (
             <div className="w-full h-full flex flex-col items-center justify-center text-yellow-600 bg-gray-950">
               <svg className="w-12 h-12 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
@@ -79,14 +149,17 @@ export const LivestreamPlayer: FC<LivestreamPlayerProps> = ({ stream, onRemove }
             <iframe
               src={embedUrl}
               className="w-full h-full"
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
               allowFullScreen
               title={stream.title}
+              referrerPolicy="strict-origin-when-cross-origin"
             />
           ) : (
             <div className="w-full h-full flex flex-col items-center justify-center text-gray-500">
               <p className="text-sm font-medium">{t('player.notStreaming')}</p>
-              <p className="text-xs text-gray-600 mt-1">{t('player.waiting')}</p>
+              <p className="text-xs text-gray-600 mt-1">
+                {platform === 'youtube' ? t('player.waiting') : activeSource.channelUrl}
+              </p>
             </div>
           )}
         </div>

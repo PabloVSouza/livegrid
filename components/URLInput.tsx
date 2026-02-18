@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 
 interface URLInputProps {
-  onAddMany: (entries: Array<{ channelUrl: string; title: string }>) => Promise<void>
+  onAddMany: (entries: Array<{ title: string; sources: string[] }>) => Promise<void>
   trigger?: ReactNode
 }
 
@@ -22,6 +22,11 @@ export const URLInput: FC<URLInputProps> = ({ onAddMany, trigger }) => {
     const input = value.trim()
     if (!input) return false
 
+    if (/^twitch:[a-zA-Z0-9_]{3,30}$/i.test(input)) return true
+    if (/^kick:[a-zA-Z0-9_-]{3,40}$/i.test(input)) return true
+    if (/^https?:\/\/(?:www\.)?twitch\.tv\/[a-zA-Z0-9_]{3,30}(?:[/?#].*)?$/i.test(input)) return true
+    if (/^https?:\/\/(?:www\.)?kick\.com\/[a-zA-Z0-9_-]{3,40}(?:[/?#].*)?$/i.test(input)) return true
+
     if (/^@[^\s]+$/u.test(input)) return true
     if (/^UC[\w-]{22}$/.test(input)) return true
     if (/youtube\.com\/@[^\s/?#]+/u.test(input)) return true
@@ -31,10 +36,25 @@ export const URLInput: FC<URLInputProps> = ({ onAddMany, trigger }) => {
     return false
   }
 
-  const parseLine = (line: string): { channelUrl: string; title: string } => ({
-    channelUrl: line.trim(),
-    title: ""
-  })
+  const parseLine = (line: string): { title: string; sources: string[] } => {
+    const trimmed = line.trim()
+    const pipeIndex = trimmed.indexOf("|")
+    if (pipeIndex === -1) {
+      return {
+        title: "",
+        sources: [trimmed]
+      }
+    }
+
+    const title = trimmed.slice(0, pipeIndex).trim()
+    const sourcesRaw = trimmed.slice(pipeIndex + 1)
+    const sources = sourcesRaw
+      .split(",")
+      .map((value) => value.trim())
+      .filter(Boolean)
+
+    return { title, sources }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -53,7 +73,7 @@ export const URLInput: FC<URLInputProps> = ({ onAddMany, trigger }) => {
     const parsedEntries = lines.map(parseLine)
     const invalidIndexes = parsedEntries
       .map((entry, index) => ({ entry, index }))
-      .filter(({ entry }) => !isValidChannelInput(entry.channelUrl))
+      .filter(({ entry }) => entry.sources.length === 0 || entry.sources.some((ref) => !isValidChannelInput(ref)))
       .map(({ index }) => index + 1)
 
     if (invalidIndexes.length > 0) {
@@ -102,7 +122,9 @@ export const URLInput: FC<URLInputProps> = ({ onAddMany, trigger }) => {
                 setChannelsInput(e.target.value)
                 setError("")
               }}
-              placeholder={"@channel_handle\nUCxxxxxxxxxxxxxxxxxxxxxx\nhttps://youtube.com/channel/UCxxxxxxxxxxxxxxxxxxxxxx"}
+              placeholder={
+                "@youtube_handle\nViagem | @acfperformance, twitch:acfperformance, kick:acfperformance\nhttps://www.twitch.tv/channel"
+              }
               className="w-full px-2 py-1 bg-gray-800 border border-gray-700 text-sm rounded focus:outline-none focus:border-blue-500 transition min-h-32"
               disabled={isLoading}
             />

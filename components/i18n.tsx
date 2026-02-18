@@ -79,6 +79,7 @@ type TranslationKey =
   | 'player.notStreaming'
   | 'player.consentRequired'
   | 'player.waiting'
+  | 'player.source'
   | 'player.adjusting'
 
 const messages: Record<Locale, Partial<Record<TranslationKey, string>>> = {
@@ -110,7 +111,7 @@ const messages: Record<Locale, Partial<Record<TranslationKey, string>>> = {
     'app.loading': 'Loading channels...',
     'about.title': 'About LiveGrid',
     'about.description':
-      'LiveGrid is a livestream monitor to watch multiple YouTube channels in a single dynamic grid.',
+      'LiveGrid is a livestream monitor to watch multiple YouTube, Twitch, and Kick channels in a single dynamic grid.',
     'about.developer': 'Developer',
     'about.stack': 'Stack',
     'about.repository': 'Repository (Open Source)',
@@ -122,7 +123,8 @@ const messages: Record<Locale, Partial<Record<TranslationKey, string>>> = {
     'input.enterAtLeastOne': 'Please enter at least one channel',
     'input.invalidLines': 'Invalid channel input on line(s): {lines}',
     'input.failedToAdd': 'Failed to add one or more channels. Check the URLs and try again.',
-    'input.supports': 'Supports per line: @handle, UC..., or YouTube channel URL.',
+    'input.supports':
+      'Supports per line: one source, or `Name | source1, source2` (YouTube/Twitch/Kick).',
     'input.fetching': 'Fetching...',
     'input.addChannels': 'Add Channels',
     'input.cancel': 'Cancel',
@@ -131,6 +133,7 @@ const messages: Record<Locale, Partial<Record<TranslationKey, string>>> = {
     'player.notStreaming': 'Channel not streaming right now',
     'player.consentRequired': 'Consent Required',
     'player.waiting': 'Waiting for this channel to go live',
+    'player.source': 'Stream source',
     'player.adjusting': 'Adjusting layout...'
   },
   'pt-BR': {
@@ -161,7 +164,7 @@ const messages: Record<Locale, Partial<Record<TranslationKey, string>>> = {
     'app.loading': 'Carregando canais...',
     'about.title': 'Sobre o LiveGrid',
     'about.description':
-      'LiveGrid é um monitor de lives para assistir múltiplos canais do YouTube em um único grid com layout dinâmico.',
+      'LiveGrid é um monitor de lives para assistir múltiplos canais do YouTube, Twitch e Kick em um único grid com layout dinâmico.',
     'about.developer': 'Desenvolvedor',
     'about.stack': 'Stack',
     'about.repository': 'Repositório (Open Source)',
@@ -174,7 +177,8 @@ const messages: Record<Locale, Partial<Record<TranslationKey, string>>> = {
     'input.invalidLines': 'Entrada de canal inválida na(s) linha(s): {lines}',
     'input.failedToAdd':
       'Falha ao adicionar um ou mais canais. Verifique as URLs e tente novamente.',
-    'input.supports': 'Suporta por linha: @handle, UC..., ou URL de canal do YouTube.',
+    'input.supports':
+      'Suporta por linha: uma fonte, ou `Nome | fonte1, fonte2` (YouTube/Twitch/Kick).',
     'input.fetching': 'Buscando...',
     'input.addChannels': 'Adicionar Canais',
     'input.cancel': 'Cancelar',
@@ -183,6 +187,7 @@ const messages: Record<Locale, Partial<Record<TranslationKey, string>>> = {
     'player.notStreaming': 'Canal não está transmitindo agora',
     'player.consentRequired': 'Consentimento Obrigatório',
     'player.waiting': 'Aguardando este canal entrar ao vivo',
+    'player.source': 'Fonte da live',
     'player.adjusting': 'Ajustando layout...'
   },
   'zh-CN': {
