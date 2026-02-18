@@ -358,6 +358,49 @@ const repairLayoutToVisible = (
   return normalizeLayout(working, streamIds, metrics, prioritizedItemId)
 }
 
+const resolveResizeWithMinimalMoves = (
+  layout: LayoutItem[],
+  streamIds: Set<string>,
+  metrics: GridMetrics,
+  activeId?: string | null
+): LayoutItem[] => {
+  const sanitized = sanitizeLayoutFromGrid(layout, streamIds, metrics)
+  if (!activeId) return sanitized
+
+  const active = sanitized.find((item) => item.i === activeId)
+  if (!active) return sanitized
+
+  const ordered = sanitized
+    .filter((item) => item.i !== activeId)
+    .sort((a, b) => (a.y - b.y) || (a.x - b.x))
+
+  const placed: LayoutItem[] = [active]
+  const placedIds = new Set<string>([active.i])
+
+  for (const item of ordered) {
+    const isVisible = isInsideVisibleGrid(item, metrics)
+    const collides = placed.some((existing) => intersects(item, existing))
+    if (isVisible && !collides) {
+      placed.push(item)
+      placedIds.add(item.i)
+      continue
+    }
+
+    const relocated = fitItemIntoGrid(item, placed, metrics)
+    placed.push(relocated)
+    placedIds.add(item.i)
+  }
+
+  // In case any item was dropped during transient invalid states, add it back minimally.
+  for (const id of streamIds) {
+    if (placedIds.has(id)) continue
+    const fallback = fitItemIntoGrid({ i: id, x: 0, y: 0, w: 1, h: 1 }, placed, metrics)
+    placed.push(fallback)
+  }
+
+  return placed
+}
+
 const sanitizeLayoutFromGrid = (
   layout: LayoutItem[],
   streamIds: Set<string>,
@@ -594,15 +637,13 @@ export const LivestreamGrid: FC<Props> = ({ livestreams, onRemove, onSelectSourc
               return direct
             }
 
-            // Only reflow when resize made layout invalid (same rule as viewport resize).
-            if (activeId) {
-              const active = layoutItems.find((item) => item.i === activeId)
-              if (active) {
-                return buildLayoutAroundPinned(livestreams, defaultLayout, metrics, active)
-              }
+            // Reflow only affected items first, keeping unaffected cells untouched when possible.
+            const minimal = resolveResizeWithMinimalMoves(layoutItems, streamIds, metrics, activeId)
+            if (!hasOutOfBounds(minimal, metrics) && !hasOverlap(minimal)) {
+              return minimal
             }
 
-            return repairLayoutToVisible(direct, streamIds, metrics, activeId)
+            return repairLayoutToVisible(minimal, streamIds, metrics, activeId)
           })()
         : sanitizeLayoutFromGrid(layoutItems, streamIds, metrics)
     let next = metrics.isMobile ? packMobileNoGaps(nextUnpacked, streamIds) : nextUnpacked
