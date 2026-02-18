@@ -41,15 +41,24 @@ type TranslationKey =
   | 'app.deleteProject'
   | 'app.createFromPreset'
   | 'app.currentProject'
+  | 'app.importShared'
+  | 'app.share'
+  | 'app.shareLink'
+  | 'app.copy'
+  | 'app.copied'
   | 'app.projectPrompt'
+  | 'app.renameProject'
   | 'app.projectDeleteConfirm'
   | 'welcome.title'
   | 'welcome.subtitle'
   | 'welcome.create'
   | 'welcome.projects'
   | 'welcome.openProject'
+  | 'welcome.editProject'
   | 'welcome.deleteProject'
   | 'welcome.deleteProjectConfirm'
+  | 'welcome.showChannels'
+  | 'welcome.hideChannels'
   | 'welcome.noProjects'
   | 'welcome.channels'
   | 'welcome.presets'
@@ -93,15 +102,24 @@ const messages: Record<Locale, Partial<Record<TranslationKey, string>>> = {
     'app.deleteProject': 'Delete Project',
     'app.createFromPreset': 'Create from preset',
     'app.currentProject': 'Current project',
+    'app.importShared': 'Import shared preset',
+    'app.share': 'Share',
+    'app.shareLink': 'Shareable link',
+    'app.copy': 'Copy',
+    'app.copied': 'Copied',
     'app.projectPrompt': 'Project name',
+    'app.renameProject': 'Rename project',
     'app.projectDeleteConfirm': 'Delete current project?',
     'welcome.title': 'Welcome to LiveGrid',
     'welcome.subtitle': 'Create a blank grid or start from a preset.',
     'welcome.create': 'Create Blank Grid',
     'welcome.projects': 'Your Projects',
     'welcome.openProject': 'Open Project',
+    'welcome.editProject': 'Rename Project',
     'welcome.deleteProject': 'Delete Project',
     'welcome.deleteProjectConfirm': 'Delete this project?',
+    'welcome.showChannels': 'Show channels',
+    'welcome.hideChannels': 'Hide channels',
     'welcome.noProjects': 'No projects yet. Create a blank grid or import a preset.',
     'welcome.channels': 'channels',
     'welcome.presets': 'Featured Projects',
@@ -117,7 +135,7 @@ const messages: Record<Locale, Partial<Record<TranslationKey, string>>> = {
     'about.repository': 'Repository (Open Source)',
     'about.website': 'Official website',
     'about.close': 'Close',
-    'input.addChannel': '+ Add Channel',
+    'input.addChannel': 'Add Channel',
     'input.modalTitle': 'Add Channel',
     'input.channelsPerLine': 'Channels (one per line)',
     'input.enterAtLeastOne': 'Please enter at least one channel',
@@ -146,15 +164,24 @@ const messages: Record<Locale, Partial<Record<TranslationKey, string>>> = {
     'app.deleteProject': 'Excluir Projeto',
     'app.createFromPreset': 'Criar do preset',
     'app.currentProject': 'Projeto atual',
+    'app.importShared': 'Importar preset compartilhado',
+    'app.share': 'Compartilhar',
+    'app.shareLink': 'Link compartilhável',
+    'app.copy': 'Copiar',
+    'app.copied': 'Copiado',
     'app.projectPrompt': 'Nome do projeto',
+    'app.renameProject': 'Renomear projeto',
     'app.projectDeleteConfirm': 'Excluir o projeto atual?',
     'welcome.title': 'Bem-vindo ao LiveGrid',
     'welcome.subtitle': 'Crie um grid vazio ou comece com um preset.',
     'welcome.create': 'Criar Grid Vazio',
     'welcome.projects': 'Seus Projetos',
     'welcome.openProject': 'Abrir Projeto',
+    'welcome.editProject': 'Renomear Projeto',
     'welcome.deleteProject': 'Excluir Projeto',
     'welcome.deleteProjectConfirm': 'Excluir este projeto?',
+    'welcome.showChannels': 'Mostrar canais',
+    'welcome.hideChannels': 'Ocultar canais',
     'welcome.noProjects': 'Nenhum projeto ainda. Crie um grid vazio ou importe um preset.',
     'welcome.channels': 'canais',
     'welcome.presets': 'Projetos em destaque',
@@ -170,7 +197,7 @@ const messages: Record<Locale, Partial<Record<TranslationKey, string>>> = {
     'about.repository': 'Repositório (Open Source)',
     'about.website': 'Site oficial',
     'about.close': 'Fechar',
-    'input.addChannel': '+ Adicionar Canal',
+    'input.addChannel': 'Adicionar Canal',
     'input.modalTitle': 'Adicionar Canal',
     'input.channelsPerLine': 'Canais (um por linha)',
     'input.enterAtLeastOne': 'Digite pelo menos um canal',
@@ -195,7 +222,7 @@ const messages: Record<Locale, Partial<Record<TranslationKey, string>>> = {
     'app.language': '语言',
     'app.empty': '添加你的第一个直播开始使用',
     'app.loading': '正在加载频道...',
-    'input.addChannel': '+ 添加频道',
+    'input.addChannel': '添加频道',
     'input.modalTitle': '添加频道',
     'input.channelsPerLine': '频道（每行一个）',
     'input.enterAtLeastOne': '请至少输入一个频道',
@@ -216,7 +243,7 @@ const messages: Record<Locale, Partial<Record<TranslationKey, string>>> = {
     'app.language': 'भाषा',
     'app.empty': 'शुरू करने के लिए अपनी पहली लाइवस्ट्रीम जोड़ें',
     'app.loading': 'चैनल लोड हो रहे हैं...',
-    'input.addChannel': '+ चैनल जोड़ें',
+    'input.addChannel': 'चैनल जोड़ें',
     'input.modalTitle': 'चैनल जोड़ें',
     'input.channelsPerLine': 'चैनल (प्रति पंक्ति एक)',
     'input.enterAtLeastOne': 'कृपया कम से कम एक चैनल दर्ज करें',
@@ -237,7 +264,7 @@ const messages: Record<Locale, Partial<Record<TranslationKey, string>>> = {
     'app.language': 'Idioma',
     'app.empty': 'Agrega tu primer directo para comenzar',
     'app.loading': 'Cargando canales...',
-    'input.addChannel': '+ Agregar canal',
+    'input.addChannel': 'Agregar canal',
     'input.modalTitle': 'Agregar canal',
     'input.channelsPerLine': 'Canales (uno por línea)',
     'input.enterAtLeastOne': 'Ingresa al menos un canal',
@@ -259,7 +286,7 @@ const messages: Record<Locale, Partial<Record<TranslationKey, string>>> = {
     'app.language': 'Langue',
     'app.empty': 'Ajoutez votre premier live pour commencer',
     'app.loading': 'Chargement des chaînes...',
-    'input.addChannel': '+ Ajouter une chaîne',
+    'input.addChannel': 'Ajouter une chaîne',
     'input.modalTitle': 'Ajouter une chaîne',
     'input.channelsPerLine': 'Chaînes (une par ligne)',
     'input.enterAtLeastOne': 'Veuillez saisir au moins une chaîne',
@@ -281,7 +308,7 @@ const messages: Record<Locale, Partial<Record<TranslationKey, string>>> = {
     'app.language': 'اللغة',
     'app.empty': 'أضف أول بث مباشر للبدء',
     'app.loading': 'جارٍ تحميل القنوات...',
-    'input.addChannel': '+ إضافة قناة',
+    'input.addChannel': 'إضافة قناة',
     'input.modalTitle': 'إضافة قناة',
     'input.channelsPerLine': 'القنوات (واحدة في كل سطر)',
     'input.enterAtLeastOne': 'الرجاء إدخال قناة واحدة على الأقل',
@@ -302,7 +329,7 @@ const messages: Record<Locale, Partial<Record<TranslationKey, string>>> = {
     'app.language': 'ভাষা',
     'app.empty': 'শুরু করতে আপনার প্রথম লাইভস্ট্রিম যোগ করুন',
     'app.loading': 'চ্যানেল লোড হচ্ছে...',
-    'input.addChannel': '+ চ্যানেল যোগ করুন',
+    'input.addChannel': 'চ্যানেল যোগ করুন',
     'input.modalTitle': 'চ্যানেল যোগ করুন',
     'input.channelsPerLine': 'চ্যানেল (প্রতি লাইনে একটি)',
     'input.enterAtLeastOne': 'কমপক্ষে একটি চ্যানেল লিখুন',
@@ -323,7 +350,7 @@ const messages: Record<Locale, Partial<Record<TranslationKey, string>>> = {
     'app.language': 'Язык',
     'app.empty': 'Добавьте первый стрим, чтобы начать',
     'app.loading': 'Загрузка каналов...',
-    'input.addChannel': '+ Добавить канал',
+    'input.addChannel': 'Добавить канал',
     'input.modalTitle': 'Добавить канал',
     'input.channelsPerLine': 'Каналы (по одному в строке)',
     'input.enterAtLeastOne': 'Введите хотя бы один канал',
@@ -345,7 +372,7 @@ const messages: Record<Locale, Partial<Record<TranslationKey, string>>> = {
     'app.language': 'زبان',
     'app.empty': 'شروع کرنے کے لیے اپنی پہلی لائیو اسٹریم شامل کریں',
     'app.loading': 'چینلز لوڈ ہو رہے ہیں...',
-    'input.addChannel': '+ چینل شامل کریں',
+    'input.addChannel': 'چینل شامل کریں',
     'input.modalTitle': 'چینل شامل کریں',
     'input.channelsPerLine': 'چینلز (ہر لائن میں ایک)',
     'input.enterAtLeastOne': 'کم از کم ایک چینل درج کریں',
