@@ -50,6 +50,15 @@ interface LiveCheckResult {
   videoId?: string | undefined | null
   consentRequired?: boolean
   isLive: boolean
+  uncertain?: boolean
+}
+
+interface ParsedSourceRef {
+  entryIndex: number
+  rawRef: string
+  platform: StreamPlatform
+  normalizedUrl: string
+  channelRef: string
 }
 
 const parseStreamInput = (input: string): ParsedStreamInput | null => {
@@ -123,6 +132,11 @@ const sourceLabel = (source: Pick<LivestreamSource, 'platform' | 'channelId' | '
   const platform = source.platform
   const channel = source.channelId || fallbackTitleFromUrl(source.channelUrl)
   return `${platform}:${channel.toLowerCase()}`
+}
+
+const sourceBatchKey = (source: Pick<LivestreamSource, 'platform' | 'channelId' | 'channelUrl'>): string => {
+  const channel = source.channelId || fallbackTitleFromUrl(source.channelUrl)
+  return `${source.platform}:${channel.toLowerCase()}`
 }
 
 const normalizeIdentity = (value: string): string =>
@@ -421,169 +435,204 @@ function AppClientContent() {
 
   const activeLivestreams = activeProject?.livestreams ?? []
 
-  const resolveChannel = async (
-    channelUrl: string
-  ): Promise<{ channelId: string; title?: string }> => {
-    const response = await fetch(`/api/resolve-channel?url=${encodeURIComponent(channelUrl)}`)
-    const data = (await response.json()) as { channelId?: string; title?: string; error?: string }
-
-    if (!response.ok || !data.channelId) {
-      throw new Error(data.error || 'Could not resolve channel')
+  const fetchLiveStatusesBatch = async (
+    sources: LivestreamSource[]
+  ): Promise<Map<string, LiveCheckResult>> => {
+    const uniqueByKey = new Map<string, LivestreamSource>()
+    for (const source of sources) {
+      uniqueByKey.set(sourceBatchKey(source), source)
+    }
+    if (uniqueByKey.size === 0) {
+      return new Map()
     }
 
-    return { channelId: data.channelId, title: data.title }
-  }
-
-  const fetchCurrentLiveVideoId = async (channelId: string): Promise<LiveCheckResult> => {
     try {
-      const response = await fetch(`/api/channel-live?channelId=${encodeURIComponent(channelId)}`)
+      const response = await fetch('/api/live-status-batch', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          sources: Array.from(uniqueByKey.entries()).map(([key, source]) => ({
+            key,
+            platform: source.platform,
+            channelId: source.channelId,
+            channelUrl: source.channelUrl
+          }))
+        })
+      })
+
       const data = (await response.json()) as {
-        live?: boolean
-        uncertain?: boolean
-        videoId?: string
-        consentRequired?: boolean
-        error?: string
+        results?: Array<{
+          key: string
+          live?: boolean
+          videoId?: string
+          consentRequired?: boolean
+          uncertain?: boolean
+        }>
       }
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to check channel live status')
+
+      if (!response.ok || !Array.isArray(data.results)) {
+        throw new Error('Failed to check live status batch')
       }
-      if (data.consentRequired) {
-        return { videoId: undefined, consentRequired: true, isLive: false }
+
+      const resultMap = new Map<string, LiveCheckResult>()
+      for (const item of data.results) {
+        resultMap.set(item.key, {
+          isLive: Boolean(item.live),
+          videoId: item.videoId,
+          consentRequired: item.consentRequired,
+          uncertain: item.uncertain
+        })
       }
-      if (data.uncertain) {
-        return { videoId: null, isLive: false }
-      }
-      return { videoId: data.live ? data.videoId : undefined, isLive: Boolean(data.live && data.videoId) }
+      return resultMap
     } catch (error) {
-      console.warn('Live status check inconclusive:', channelId, error)
-      return { videoId: null, isLive: false }
+      console.warn('Live status batch check inconclusive:', error)
+      return new Map()
     }
   }
 
-  const fetchPlatformLiveStatus = async (
-    platform: Exclude<StreamPlatform, 'youtube'>,
-    channelRef: string
-  ): Promise<LiveCheckResult> => {
+  const resolveChannelsBatch = async (
+    urls: string[]
+  ): Promise<Map<string, { channelId: string; title?: string }>> => {
+    if (urls.length === 0) return new Map()
     try {
-      const response = await fetch(
-        `/api/platform-live?platform=${encodeURIComponent(platform)}&channel=${encodeURIComponent(channelRef)}`
-      )
+      const response = await fetch('/api/resolve-channel-batch', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ urls })
+      })
       const data = (await response.json()) as {
-        live?: boolean
-        uncertain?: boolean
-        error?: string
+        results?: Array<{
+          url: string
+          normalizedUrl?: string
+          ok: boolean
+          channelId?: string
+          title?: string
+        }>
       }
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to check channel live status')
+
+      if (!response.ok || !Array.isArray(data.results)) {
+        throw new Error('Failed to resolve channels batch')
       }
-      if (data.uncertain) {
-        return { videoId: null, isLive: false }
-      }
-      return { isLive: Boolean(data.live) }
-    } catch (error) {
-      console.warn('Live status check inconclusive:', platform, channelRef, error)
-      return { videoId: null, isLive: false }
-    }
-  }
 
-  const checkSourceLive = async (source: LivestreamSource): Promise<LivestreamSource> => {
-    if (source.platform === 'youtube') {
-      if (!source.channelId) return { ...source, isLive: false, videoId: undefined }
-      const liveResult = await fetchCurrentLiveVideoId(source.channelId)
-      if (liveResult.videoId === null) {
-        return source
-      }
-      return {
-        ...source,
-        videoId: liveResult.videoId,
-        consentRequired: liveResult.consentRequired,
-        isLive: liveResult.isLive
-      }
-    }
-
-    const channelRef = source.channelId || fallbackTitleFromUrl(source.channelUrl)
-    const result = await fetchPlatformLiveStatus(source.platform, channelRef)
-    if (result.videoId === null) return source
-    return {
-      ...source,
-      videoId: undefined,
-      consentRequired: false,
-      isLive: result.isLive
-    }
-  }
-
-  const createSource = async (
-    channelUrl: string
-  ): Promise<{ source: LivestreamSource; resolvedTitle?: string }> => {
-    const parsed = parseStreamInput(channelUrl)
-    if (!parsed) {
-      throw new Error('Invalid channel input')
-    }
-
-    if (parsed.platform === 'youtube') {
-      const resolved = await resolveChannel(parsed.normalizedUrl)
-      const liveResult = await fetchCurrentLiveVideoId(resolved.channelId)
-
-      return {
-        resolvedTitle: resolved.title,
-        source: {
-          sourceId: createId(),
-          platform: 'youtube',
-          channelUrl: parsed.normalizedUrl,
-          channelId: resolved.channelId,
-          videoId: liveResult.videoId ?? undefined,
-          consentRequired: liveResult.consentRequired,
-          isLive: liveResult.isLive
+      const map = new Map<string, { channelId: string; title?: string }>()
+      for (const item of data.results) {
+        if (!item.ok || !item.channelId) continue
+        map.set(item.url, { channelId: item.channelId, title: item.title })
+        if (item.normalizedUrl) {
+          map.set(item.normalizedUrl, { channelId: item.channelId, title: item.title })
         }
       }
-    }
-
-    const liveResult = await fetchPlatformLiveStatus(parsed.platform, parsed.channelRef)
-
-    return {
-      source: {
-        sourceId: createId(),
-        platform: parsed.platform,
-        channelUrl: parsed.normalizedUrl,
-        channelId: parsed.channelRef,
-        isLive: liveResult.isLive
-      }
+      return map
+    } catch (error) {
+      console.warn('Resolve channels batch failed:', error)
+      return new Map()
     }
   }
 
-  const createLivestream = async (entry: AddChannelRequest): Promise<Livestream> => {
-    const refs = entry.sources.map((value) => value.trim()).filter(Boolean)
-    if (refs.length === 0) {
-      throw new Error('No channel source provided')
-    }
-
-    const builtSources: LivestreamSource[] = []
-    let resolvedTitle = entry.title.trim()
-
-    for (const ref of refs) {
-      const built = await createSource(ref)
-      if (!resolvedTitle && built.resolvedTitle) {
-        resolvedTitle = built.resolvedTitle
+  const parseEntriesToSources = (entries: AddChannelRequest[]): ParsedSourceRef[] => {
+    const parsed: ParsedSourceRef[] = []
+    for (let entryIndex = 0; entryIndex < entries.length; entryIndex += 1) {
+      const refs = entries[entryIndex].sources.map((value) => value.trim()).filter(Boolean)
+      for (const rawRef of refs) {
+        const item = parseStreamInput(rawRef)
+        if (!item) continue
+        parsed.push({
+          entryIndex,
+          rawRef,
+          platform: item.platform,
+          normalizedUrl: item.normalizedUrl,
+          channelRef: item.channelRef
+        })
       }
-      builtSources.push(built.source)
+    }
+    return parsed
+  }
+
+  const createLivestreamsBatch = async (entries: AddChannelRequest[]): Promise<Livestream[]> => {
+    const parsedRefs = parseEntriesToSources(entries)
+    if (parsedRefs.length === 0) return []
+
+    const youtubeUrls = Array.from(
+      new Set(parsedRefs.filter((item) => item.platform === 'youtube').map((item) => item.normalizedUrl))
+    )
+    const resolvedYoutube = await resolveChannelsBatch(youtubeUrls)
+
+    const sourceRefsByEntry = new Map<number, LivestreamSource[]>()
+    const resolvedTitleByEntry = new Map<number, string>()
+
+    for (const ref of parsedRefs) {
+      if (ref.platform === 'youtube') {
+        const resolved = resolvedYoutube.get(ref.normalizedUrl) || resolvedYoutube.get(ref.rawRef)
+        if (!resolved?.channelId) continue
+        const source: LivestreamSource = {
+          sourceId: createId(),
+          platform: 'youtube',
+          channelUrl: ref.normalizedUrl,
+          channelId: resolved.channelId
+        }
+        if (!resolvedTitleByEntry.has(ref.entryIndex) && resolved.title) {
+          resolvedTitleByEntry.set(ref.entryIndex, resolved.title)
+        }
+        const list = sourceRefsByEntry.get(ref.entryIndex) ?? []
+        list.push(source)
+        sourceRefsByEntry.set(ref.entryIndex, list)
+        continue
+      }
+
+      const source: LivestreamSource = {
+        sourceId: createId(),
+        platform: ref.platform,
+        channelUrl: ref.normalizedUrl,
+        channelId: ref.channelRef
+      }
+      const list = sourceRefsByEntry.get(ref.entryIndex) ?? []
+      list.push(source)
+      sourceRefsByEntry.set(ref.entryIndex, list)
     }
 
-    const firstSource = builtSources[0]
-    const initialTitle = resolvedTitle || fallbackTitleFromUrl(firstSource.channelUrl)
-    const liveFirst = builtSources.find((source) => source.isLive) || firstSource
+    const allSources = Array.from(sourceRefsByEntry.values()).flat()
+    const liveByKey = await fetchLiveStatusesBatch(allSources)
 
-    return normalizeLivestream({
-      id: createId(),
-      title: initialTitle,
-      platform: liveFirst.platform,
-      channelUrl: liveFirst.channelUrl,
-      channelId: liveFirst.channelId,
-      videoId: liveFirst.videoId,
-      consentRequired: liveFirst.consentRequired,
-      isLive: liveFirst.isLive,
-      activeSourceId: liveFirst.sourceId,
-      sources: builtSources
-    })
+    const created: Livestream[] = []
+    for (let entryIndex = 0; entryIndex < entries.length; entryIndex += 1) {
+      const entrySources = sourceRefsByEntry.get(entryIndex) ?? []
+      if (entrySources.length === 0) continue
+
+      const enriched = entrySources.map((source) => {
+        const result = liveByKey.get(sourceBatchKey(source))
+        if (!result || result.uncertain) return source
+        return {
+          ...source,
+          videoId: source.platform === 'youtube' ? result.videoId ?? undefined : undefined,
+          consentRequired: source.platform === 'youtube' ? result.consentRequired : false,
+          isLive: result.isLive
+        }
+      })
+
+      const firstSource = enriched[0]
+      const entry = entries[entryIndex]
+      const explicitTitle = entry.title.trim()
+      const resolvedTitle = resolvedTitleByEntry.get(entryIndex)
+      const initialTitle = explicitTitle || resolvedTitle || fallbackTitleFromUrl(firstSource.channelUrl)
+      const liveFirst = enriched.find((source) => source.isLive) || firstSource
+
+      created.push(
+        normalizeLivestream({
+          id: createId(),
+          title: initialTitle,
+          platform: liveFirst.platform,
+          channelUrl: liveFirst.channelUrl,
+          channelId: liveFirst.channelId,
+          videoId: liveFirst.videoId,
+          consentRequired: liveFirst.consentRequired,
+          isLive: liveFirst.isLive,
+          activeSourceId: liveFirst.sourceId,
+          sources: enriched
+        })
+      )
+    }
+
+    return created
   }
 
   const updateActiveProjectLivestreams = (updater: (current: Livestream[]) => Livestream[]) => {
@@ -600,16 +649,7 @@ function AppClientContent() {
   const addLivestreams = async (entries: AddChannelRequest[]) => {
     if (!activeProjectId) return
 
-    const created: Livestream[] = []
-
-    for (const entry of entries) {
-      try {
-        const stream = await createLivestream(entry)
-        created.push(stream)
-      } catch (error) {
-        console.error('Failed to add channel group:', entry, error)
-      }
-    }
+    const created = await createLivestreamsBatch(entries)
 
     if (created.length === 0) return
 
@@ -649,12 +689,33 @@ function AppClientContent() {
     const refreshLiveStatuses = async () => {
       const snapshot =
         projectsRef.current.find((project) => project.id === activeProjectId)?.livestreams ?? []
+      const allSources = snapshot.flatMap((stream) => normalizeLivestream(stream).sources ?? [])
+      const liveByKey = await fetchLiveStatusesBatch(allSources)
 
       const refreshed = await Promise.all(
         snapshot.map(async (stream) => {
           const normalized = normalizeLivestream(stream)
           const currentSources = normalized.sources ?? []
-          const refreshedSources = await Promise.all(currentSources.map((source) => checkSourceLive(source)))
+          const refreshedSources = currentSources.map((source) => {
+            const result = liveByKey.get(sourceBatchKey(source))
+            if (!result || result.uncertain) {
+              return source
+            }
+            if (source.platform === 'youtube') {
+              return {
+                ...source,
+                videoId: result.videoId ?? undefined,
+                consentRequired: result.consentRequired,
+                isLive: result.isLive
+              }
+            }
+            return {
+              ...source,
+              videoId: undefined,
+              consentRequired: false,
+              isLive: result.isLive
+            }
+          })
           const previousActive = refreshedSources.find(
             (source) => source.sourceId === normalized.activeSourceId
           )
@@ -707,15 +768,9 @@ function AppClientContent() {
     setIsImportingPresetId(preset.id)
 
     try {
-      const streams: Livestream[] = []
-      for (const channel of preset.channels) {
-        try {
-          const stream = await createLivestream({ title: '', sources: [channel] })
-          streams.push(stream)
-        } catch (error) {
-          console.error('Failed to import preset channel:', channel, error)
-        }
-      }
+      const streams = await createLivestreamsBatch(
+        preset.channels.map((channel) => ({ title: '', sources: [channel] }))
+      )
 
       const project: LiveGridProject = {
         id: createId(),
