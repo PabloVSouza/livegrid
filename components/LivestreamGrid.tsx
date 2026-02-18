@@ -177,14 +177,49 @@ const allocateEvenly = (totalUnits: number, count: number): number[] => {
 const intersects = (a: LayoutItem, b: LayoutItem): boolean =>
   a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y
 
-const clampSquareItem = (item: LayoutItem, metrics: GridMetrics): LayoutItem => {
-  const size = Math.min(
-    Math.max(1, Math.round(Math.max(item.w, item.h))),
-    Math.max(1, Math.min(metrics.cols, metrics.rows))
-  )
-  const x = Math.min(Math.max(0, Math.round(item.x)), Math.max(0, metrics.cols - size))
-  const y = Math.min(Math.max(0, Math.round(item.y)), Math.max(0, metrics.rows - size))
-  return { ...item, x, y, w: size, h: size }
+const hasOverlap = (layout: LayoutItem[]): boolean => {
+  for (let i = 0; i < layout.length; i += 1) {
+    for (let j = i + 1; j < layout.length; j += 1) {
+      if (intersects(layout[i], layout[j])) {
+        return true
+      }
+    }
+  }
+  return false
+}
+
+const isInsideVisibleGrid = (item: LayoutItem, metrics: GridMetrics): boolean =>
+  item.x >= 0 &&
+  item.y >= 0 &&
+  item.w >= 1 &&
+  item.h >= 1 &&
+  item.x + item.w <= metrics.cols &&
+  item.y + item.h <= metrics.rows
+
+const hasOutOfBounds = (layout: LayoutItem[], metrics: GridMetrics): boolean =>
+  layout.some((item) => !isInsideVisibleGrid(item, metrics))
+
+const shrinkLargestItem = (layout: LayoutItem[]): LayoutItem[] => {
+  if (layout.length === 0) return layout
+
+  let largestIndex = 0
+  let largestArea = layout[0].w * layout[0].h
+  for (let i = 1; i < layout.length; i += 1) {
+    const area = layout[i].w * layout[i].h
+    if (area > largestArea) {
+      largestArea = area
+      largestIndex = i
+    }
+  }
+
+  const next = [...layout]
+  const largest = next[largestIndex]
+  if (largest.w > 1) {
+    next[largestIndex] = { ...largest, w: largest.w - 1 }
+  } else if (largest.h > 1) {
+    next[largestIndex] = { ...largest, h: largest.h - 1 }
+  }
+  return next
 }
 
 const clampLayoutItem = (item: LayoutItem, metrics: GridMetrics): LayoutItem => {
@@ -225,23 +260,32 @@ const findOpenSlot = (
 }
 
 const fitItemIntoGrid = (item: LayoutItem, placed: LayoutItem[], metrics: GridMetrics): LayoutItem => {
-  const base = clampSquareItem(item, metrics)
+  const base = clampLayoutItem(item, metrics)
   const desiredX = Math.min(Math.max(0, Math.round(item.x)), Math.max(0, metrics.cols - 1))
   const desiredY = Math.min(Math.max(0, Math.round(item.y)), Math.max(0, metrics.rows - 1))
-  const sizeCandidates: number[] = []
-  for (let size = base.w; size >= 1; size -= 1) sizeCandidates.push(size)
+  const widthCandidates: number[] = []
+  const heightCandidates: number[] = []
 
-  for (const size of sizeCandidates) {
-    const candidate = clampSquareItem({ ...base, x: desiredX, y: desiredY, w: size, h: size }, metrics)
-    const slot = findOpenSlot(candidate, placed, metrics)
-    const positioned: LayoutItem = { ...candidate, ...slot }
-    if (!placed.some((existing) => intersects(positioned, existing))) {
-      return positioned
+  for (let w = base.w; w >= 1; w -= 1) widthCandidates.push(w)
+
+  const maxHeightAtDesiredY = Math.max(1, metrics.rows - desiredY)
+  const preferredStartH = Math.min(base.h, maxHeightAtDesiredY)
+  for (let h = preferredStartH; h >= 1; h -= 1) heightCandidates.push(h)
+  for (let h = base.h; h > preferredStartH; h -= 1) heightCandidates.push(h)
+
+  for (const w of widthCandidates) {
+    for (const h of heightCandidates) {
+      const candidate = clampLayoutItem({ ...base, x: desiredX, y: desiredY, w, h }, metrics)
+      const slot = findOpenSlot(candidate, placed, metrics)
+      const positioned: LayoutItem = { ...candidate, ...slot }
+      if (!placed.some((existing) => intersects(positioned, existing))) {
+        return positioned
+      }
     }
   }
 
   // Last resort: smallest possible tile in first free slot.
-  const tiny = clampSquareItem({ ...base, w: 1, h: 1 }, metrics)
+  const tiny = clampLayoutItem({ ...base, w: 1, h: 1 }, metrics)
   const slot = findOpenSlot(tiny, placed, metrics)
   return { ...tiny, ...slot }
 }
@@ -274,7 +318,7 @@ const normalizeLayout = (
       prioritizedItemId && raw.i === prioritizedItemId
         ? (() => {
             // Keep the resized item dimensions and let other items adapt around it.
-            const pinned = clampSquareItem(raw, metrics)
+            const pinned = clampLayoutItem(raw, metrics)
             const slot = findOpenSlot(pinned, placed, metrics)
             return { ...pinned, ...slot }
           })()
@@ -283,6 +327,34 @@ const normalizeLayout = (
   }
 
   return placed
+}
+
+const repairLayoutToVisible = (
+  layout: LayoutItem[],
+  streamIds: Set<string>,
+  metrics: GridMetrics,
+  prioritizedItemId?: string | null
+): LayoutItem[] => {
+  let working = sanitizeLayoutFromGrid(layout, streamIds, metrics)
+  const maxIterations = Math.max(8, working.length * 10)
+
+  for (let i = 0; i < maxIterations; i += 1) {
+    const repaired = normalizeLayout(working, streamIds, metrics, prioritizedItemId)
+    if (!hasOutOfBounds(repaired, metrics) && !hasOverlap(repaired)) {
+      return repaired
+    }
+
+    const shrunk = shrinkLargestItem(working)
+    const unchanged = shrunk.every(
+      (item, index) => item.w === working[index].w && item.h === working[index].h
+    )
+    working = shrunk
+    if (unchanged) {
+      return repaired
+    }
+  }
+
+  return normalizeLayout(working, streamIds, metrics, prioritizedItemId)
 }
 
 const sanitizeLayoutFromGrid = (
@@ -298,7 +370,7 @@ const sanitizeLayoutFromGrid = (
       unique.add(item.i)
       return true
     })
-    .map((item) => clampSquareItem(item, metrics))
+    .map((item) => clampLayoutItem(item, metrics))
 }
 
 const packMobileNoGaps = (layout: LayoutItem[], streamIds: Set<string>): LayoutItem[] => {
@@ -352,7 +424,7 @@ const buildLayoutAroundPinned = (
 ): LayoutItem[] => {
   const streamIds = new Set(livestreams.map((stream) => stream.id))
   const defaultsById = new Map(defaultLayout.map((item) => [item.i, item]))
-  const pinned = clampSquareItem(pinnedItem, metrics)
+  const pinned = clampLayoutItem(pinnedItem, metrics)
   const placed: LayoutItem[] = [pinned]
   const totalCells = metrics.cols * metrics.rows
 
@@ -368,7 +440,7 @@ const buildLayoutAroundPinned = (
     const targetAreaPerItem = Math.max(1, Math.floor(freeCells / Math.max(1, remainingItems)))
     const targetSize = Math.max(1, Math.floor(Math.sqrt(targetAreaPerItem)))
     const fallback = defaultsById.get(stream.id) ?? { i: stream.id, x: 0, y: 0, w: 1, h: 1 }
-    const candidate = clampSquareItem({ ...fallback, w: targetSize, h: targetSize }, metrics)
+    const candidate = clampLayoutItem({ ...fallback, w: targetSize, h: targetSize }, metrics)
     const fitted = fitItemIntoGrid(candidate, placed, metrics)
     placed.push(fitted)
   }
@@ -418,6 +490,7 @@ export const LivestreamGrid: FC<Props> = ({ livestreams, onRemove, layoutStorage
   const lastValidLayoutRef = useRef<LayoutItem[] | null>(null)
   const resizeRejectedRef = useRef(false)
   const interactionItemIdRef = useRef<string | null>(null)
+  const [interactionMode, setInteractionMode] = useState<"idle" | "drag" | "resize">("idle")
   const modeLayoutStorageKey = `${layoutStorageKey}_${gridSize.width < 768 ? "mobile" : "desktop"}`
 
   useEffect(() => {
@@ -460,6 +533,23 @@ export const LivestreamGrid: FC<Props> = ({ livestreams, onRemove, layoutStorage
     }
   }, [layout])
 
+  useEffect(() => {
+    if (isInteractingRef.current) return
+    if (livestreams.length === 0) return
+
+    const streamIds = new Set(livestreams.map((stream) => stream.id))
+    if (!hasOutOfBounds(layout, metrics) && !hasOverlap(layout)) return
+
+    const repaired = repairLayoutToVisible(layout, streamIds, metrics)
+    const packed = metrics.isMobile ? packMobileNoGaps(repaired, streamIds) : repaired
+
+    if (hasOutOfBounds(packed, metrics) || hasOverlap(packed)) return
+
+    setManualLayout(packed)
+    saveStoredManualLayout(modeLayoutStorageKey, packed)
+    lastValidLayoutRef.current = packed
+  }, [layout, livestreams, metrics, modeLayoutStorageKey])
+
   const onInteractionStart = () => {
     isInteractingRef.current = true
     setIsInteracting(true)
@@ -480,6 +570,7 @@ export const LivestreamGrid: FC<Props> = ({ livestreams, onRemove, layoutStorage
   ) => {
     if (!isInteractingRef.current) return
     isInteractingRef.current = false
+    setInteractionMode("idle")
     setIsInteracting(false)
     setIsResizeInvalid(false)
     if (!Array.isArray(layoutArg)) return
@@ -498,7 +589,18 @@ export const LivestreamGrid: FC<Props> = ({ livestreams, onRemove, layoutStorage
         : mode === "resize"
           ? normalizeLayout(layoutItems, streamIds, metrics, activeId)
           : sanitizeLayoutFromGrid(layoutItems, streamIds, metrics)
-    const next = metrics.isMobile ? packMobileNoGaps(nextUnpacked, streamIds) : nextUnpacked
+    let next = metrics.isMobile ? packMobileNoGaps(nextUnpacked, streamIds) : nextUnpacked
+    if (mode === "drag" && (hasOutOfBounds(next, metrics) || hasOverlap(next))) {
+      const repaired = repairLayoutToVisible(next, streamIds, metrics, activeId)
+      next = metrics.isMobile ? packMobileNoGaps(repaired, streamIds) : repaired
+    }
+    if (hasOutOfBounds(next, metrics) || hasOverlap(next)) {
+      if (lastValidLayoutRef.current) {
+        setManualLayout(lastValidLayoutRef.current)
+      }
+      interactionItemIdRef.current = null
+      return
+    }
     setManualLayout(next)
     saveStoredManualLayout(modeLayoutStorageKey, next)
     lastValidLayoutRef.current = next
@@ -509,6 +611,7 @@ export const LivestreamGrid: FC<Props> = ({ livestreams, onRemove, layoutStorage
     void layoutArg
     void oldItemArg
     onInteractionStart()
+    setInteractionMode("drag")
     if (newItemArg && typeof newItemArg === "object") {
       interactionItemIdRef.current = (newItemArg as LayoutItem).i ?? null
     } else {
@@ -526,6 +629,7 @@ export const LivestreamGrid: FC<Props> = ({ livestreams, onRemove, layoutStorage
   const onResizeStart = (layoutArg: unknown, oldItemArg: unknown, newItemArg: unknown) => {
     void layoutArg
     onInteractionStart()
+    setInteractionMode("resize")
     resizeRejectedRef.current = false
     if (newItemArg && typeof newItemArg === "object") {
       interactionItemIdRef.current = (newItemArg as LayoutItem).i ?? null
@@ -565,6 +669,7 @@ export const LivestreamGrid: FC<Props> = ({ livestreams, onRemove, layoutStorage
     if (resizeRejectedRef.current) {
       resizeRejectedRef.current = false
       isInteractingRef.current = false
+      setInteractionMode("idle")
       setIsInteracting(false)
       setIsResizeInvalid(false)
       interactionItemIdRef.current = null
