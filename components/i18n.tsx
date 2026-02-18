@@ -124,7 +124,7 @@ const messages: Record<Locale, Partial<Record<TranslationKey, string>>> = {
     'input.invalidLines': 'Invalid channel input on line(s): {lines}',
     'input.failedToAdd': 'Failed to add one or more channels. Check the URLs and try again.',
     'input.supports':
-      'Supports per line: one source, or `Name | source1, source2` (YouTube/Twitch/Kick).',
+      'Supports plain lines, `Name | source1, source2`, or YAML (`entries: [{ title, sources }]`).',
     'input.fetching': 'Fetching...',
     'input.addChannels': 'Add Channels',
     'input.cancel': 'Cancel',
@@ -178,7 +178,7 @@ const messages: Record<Locale, Partial<Record<TranslationKey, string>>> = {
     'input.failedToAdd':
       'Falha ao adicionar um ou mais canais. Verifique as URLs e tente novamente.',
     'input.supports':
-      'Suporta por linha: uma fonte, ou `Nome | fonte1, fonte2` (YouTube/Twitch/Kick).',
+      'Suporta linhas simples, `Nome | fonte1, fonte2`, ou YAML (`entries: [{ title, sources }]`).',
     'input.fetching': 'Buscando...',
     'input.addChannels': 'Adicionar Canais',
     'input.cancel': 'Cancelar',

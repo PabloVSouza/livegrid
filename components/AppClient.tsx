@@ -768,9 +768,14 @@ function AppClientContent() {
     setIsImportingPresetId(preset.id)
 
     try {
-      const streams = await createLivestreamsBatch(
-        preset.channels.map((channel) => ({ title: '', sources: [channel] }))
-      )
+      const presetEntries =
+        preset.entries?.map((entry) => ({
+          title: entry.title ?? '',
+          sources: entry.sources
+        })) ??
+        (preset.channels ?? []).map((channel) => ({ title: '', sources: [channel] }))
+
+      const streams = await createLivestreamsBatch(presetEntries)
 
       const project: LiveGridProject = {
         id: createId(),

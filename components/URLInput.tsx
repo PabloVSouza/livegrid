@@ -5,6 +5,7 @@ import { useState } from "react"
 import { useI18n } from "./i18n"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { parse as parseYaml } from "yaml"
 
 interface URLInputProps {
   onAddMany: (entries: Array<{ title: string; sources: string[] }>) => Promise<void>
@@ -56,21 +57,129 @@ export const URLInput: FC<URLInputProps> = ({ onAddMany, trigger }) => {
     return { title, sources }
   }
 
+  const normalizeYamlEntry = (
+    item: unknown,
+    fallbackTitle = ""
+  ): { title: string; sources: string[] } | null => {
+    if (typeof item === "string") {
+      const source = item.trim()
+      return source ? { title: fallbackTitle, sources: [source] } : null
+    }
+
+    if (Array.isArray(item)) {
+      const sources = item
+        .map((value) => (typeof value === "string" ? value.trim() : ""))
+        .filter(Boolean)
+      return sources.length > 0 ? { title: fallbackTitle, sources } : null
+    }
+
+    if (item && typeof item === "object") {
+      const record = item as Record<string, unknown>
+      const title =
+        typeof record.title === "string" && record.title.trim().length > 0
+          ? record.title.trim()
+          : fallbackTitle
+
+      const rawSources = Array.isArray(record.sources)
+        ? record.sources
+        : Array.isArray(record.channels)
+          ? record.channels
+          : typeof record.source === "string"
+            ? [record.source]
+            : typeof record.channel === "string"
+              ? [record.channel]
+              : []
+
+      const sources = rawSources
+        .map((value) => (typeof value === "string" ? value.trim() : ""))
+        .filter(Boolean)
+
+      return sources.length > 0 ? { title, sources } : null
+    }
+
+    return null
+  }
+
+  const shouldTryYaml = (text: string): boolean =>
+    /(^|\n)\s*(entries|channels)\s*:/.test(text) ||
+    /(^|\n)\s*-\s*title\s*:/.test(text) ||
+    /(^|\n)\s*[a-zA-Z0-9 _-]+\s*:\s*\n/.test(text) ||
+    text.trim().startsWith("---")
+
+  const parseYamlEntries = (text: string): Array<{ title: string; sources: string[] }> => {
+    const parsed = parseYaml(text) as unknown
+    const entries: Array<{ title: string; sources: string[] }> = []
+
+    if (Array.isArray(parsed)) {
+      for (const item of parsed) {
+        const normalized = normalizeYamlEntry(item)
+        if (normalized) entries.push(normalized)
+      }
+      return entries
+    }
+
+    if (parsed && typeof parsed === "object") {
+      const record = parsed as Record<string, unknown>
+
+      if (Array.isArray(record.entries)) {
+        for (const item of record.entries) {
+          const normalized = normalizeYamlEntry(item)
+          if (normalized) entries.push(normalized)
+        }
+      }
+
+      if (Array.isArray(record.channels)) {
+        for (const item of record.channels) {
+          const normalized = normalizeYamlEntry(item)
+          if (normalized) entries.push(normalized)
+        }
+      }
+
+      // map style: rato_borrachudo: [@ratoborrachudo, kick:ratoborrachudokick]
+      for (const [key, value] of Object.entries(record)) {
+        if (key === "entries" || key === "channels" || key === "id" || key === "name" || key === "description" || key === "image") {
+          continue
+        }
+        const normalized = normalizeYamlEntry(value, key.replace(/[_-]+/g, " ").trim())
+        if (normalized) entries.push(normalized)
+      }
+    }
+
+    return entries
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError("")
 
-    const lines = channelsInput
-      .split("\n")
-      .map((line) => line.trim())
-      .filter(Boolean)
-
-    if (lines.length === 0) {
+    const trimmedInput = channelsInput.trim()
+    if (!trimmedInput) {
       setError(t("input.enterAtLeastOne"))
       return
     }
 
-    const parsedEntries = lines.map(parseLine)
+    let parsedEntries: Array<{ title: string; sources: string[] }> = []
+    const yamlMode = shouldTryYaml(trimmedInput)
+
+    if (yamlMode) {
+      try {
+        parsedEntries = parseYamlEntries(trimmedInput)
+      } catch {
+        setError("Invalid YAML format")
+        return
+      }
+    } else {
+      const lines = trimmedInput
+        .split("\n")
+        .map((line) => line.trim())
+        .filter(Boolean)
+      parsedEntries = lines.map(parseLine)
+    }
+
+    if (parsedEntries.length === 0) {
+      setError(t("input.enterAtLeastOne"))
+      return
+    }
     const invalidIndexes = parsedEntries
       .map((entry, index) => ({ entry, index }))
       .filter(({ entry }) => entry.sources.length === 0 || entry.sources.some((ref) => !isValidChannelInput(ref)))
@@ -123,7 +232,7 @@ export const URLInput: FC<URLInputProps> = ({ onAddMany, trigger }) => {
                 setError("")
               }}
               placeholder={
-                "@youtube_handle\nViagem | @acfperformance, twitch:acfperformance, kick:acfperformance\nhttps://www.twitch.tv/channel"
+                "@youtube_handle\nRato Borrachudo | @ratoborrachudo, kick:ratoborrachudokick\n\nentries:\n  - title: Rato Borrachudo\n    sources:\n      - @ratoborrachudo\n      - kick:ratoborrachudokick"
               }
               className="w-full px-2 py-1 bg-gray-800 border border-gray-700 text-sm rounded focus:outline-none focus:border-blue-500 transition min-h-32"
               disabled={isLoading}
