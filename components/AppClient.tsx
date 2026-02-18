@@ -428,6 +428,7 @@ function AppClientContent() {
   const [sharedPreview, setSharedPreview] = useState<SharedPreviewProject | null>(null)
   const [isLoadingSharedPreview, setIsLoadingSharedPreview] = useState(false)
   const [isHydrated, setIsHydrated] = useState(false)
+  const [isClientMounted, setIsClientMounted] = useState(false)
   const [isAboutOpen, setIsAboutOpen] = useState(false)
   const [isRenameOpen, setIsRenameOpen] = useState(false)
   const [isShareOpen, setIsShareOpen] = useState(false)
@@ -437,10 +438,19 @@ function AppClientContent() {
   const [didCopyShare, setDidCopyShare] = useState(false)
   const [isImportingPresetId, setIsImportingPresetId] = useState<string | null>(null)
   const projectsRef = useRef<LiveGridProject[]>(projects)
+  const sharedPreviewRef = useRef<SharedPreviewProject | null>(sharedPreview)
 
   useEffect(() => {
     projectsRef.current = projects
   }, [projects])
+
+  useEffect(() => {
+    sharedPreviewRef.current = sharedPreview
+  }, [sharedPreview])
+
+  useEffect(() => {
+    setIsClientMounted(true)
+  }, [])
 
   useEffect(() => {
     const loadedProjects = deserializeProjects(
@@ -958,7 +968,7 @@ function AppClientContent() {
     const refreshLiveStatuses = async () => {
       const snapshot = activeProjectId
         ? projectsRef.current.find((project) => project.id === activeProjectId)?.livestreams ?? []
-        : sharedPreview?.livestreams ?? []
+        : sharedPreviewRef.current?.livestreams ?? []
       if (snapshot.length === 0) return
       const allSources = snapshot.flatMap((stream) => normalizeLivestream(stream).sources ?? [])
       const liveByKey = await fetchLiveStatusesBatch(allSources)
@@ -1025,15 +1035,26 @@ function AppClientContent() {
     }
 
     void refreshLiveStatuses()
+    const handleVisibilityOrFocus = () => {
+      if (document.visibilityState === 'visible') {
+        void refreshLiveStatuses()
+      }
+    }
+
+    window.addEventListener('focus', handleVisibilityOrFocus)
+    document.addEventListener('visibilitychange', handleVisibilityOrFocus)
+
     const intervalId = window.setInterval(() => {
       void refreshLiveStatuses()
     }, REFRESH_INTERVAL_MS)
 
     return () => {
       cancelled = true
+      window.removeEventListener('focus', handleVisibilityOrFocus)
+      document.removeEventListener('visibilitychange', handleVisibilityOrFocus)
       window.clearInterval(intervalId)
     }
-  }, [activeProjectId, activeLivestreams.length, isHydrated, sharedPreview])
+  }, [activeProjectId, activeLivestreams.length, isHydrated])
 
   const createBlankProject = () => {
     const project: LiveGridProject = {
@@ -1188,42 +1209,53 @@ function AppClientContent() {
               </Tooltip>
             )}
 
-            <Popover>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      aria-label={t('app.language')}
-                      className="bg-gray-900 border border-gray-700 text-gray-100 hover:bg-gray-800 hover:text-gray-100"
-                    >
-                      <span className="text-xs font-semibold">{localeShort}</span>
-                    </Button>
-                  </PopoverTrigger>
-                </TooltipTrigger>
-                <TooltipContent>{t('app.language')}</TooltipContent>
-              </Tooltip>
-              <PopoverContent align="end" className="w-56 bg-gray-900 border-gray-700 p-1">
-                <div className="max-h-72 overflow-auto">
-                  {locales.map((option) => (
-                    <button
-                      key={option}
-                      type="button"
-                      onClick={() => setLocale(option)}
-                      className={`w-full text-left px-3 py-2 rounded text-sm transition flex items-center justify-between ${
-                        option === locale
-                          ? 'bg-gray-800 text-white'
-                          : 'text-gray-300 hover:bg-gray-800/60'
-                      }`}
-                    >
-                      <span>{localeLabels[option]}</span>
-                      {option === locale ? <Languages className="size-4 text-blue-400" /> : null}
-                    </button>
-                  ))}
-                </div>
-              </PopoverContent>
-            </Popover>
+            {isClientMounted ? (
+              <Popover>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label={t('app.language')}
+                        className="bg-gray-900 border border-gray-700 text-gray-100 hover:bg-gray-800 hover:text-gray-100"
+                      >
+                        <span className="text-xs font-semibold">{localeShort}</span>
+                      </Button>
+                    </PopoverTrigger>
+                  </TooltipTrigger>
+                  <TooltipContent>{t('app.language')}</TooltipContent>
+                </Tooltip>
+                <PopoverContent align="end" className="w-56 bg-gray-900 border-gray-700 p-1">
+                  <div className="max-h-72 overflow-auto">
+                    {locales.map((option) => (
+                      <button
+                        key={option}
+                        type="button"
+                        onClick={() => setLocale(option)}
+                        className={`w-full text-left px-3 py-2 rounded text-sm transition flex items-center justify-between ${
+                          option === locale
+                            ? 'bg-gray-800 text-white'
+                            : 'text-gray-300 hover:bg-gray-800/60'
+                        }`}
+                      >
+                        <span>{localeLabels[option]}</span>
+                        {option === locale ? <Languages className="size-4 text-blue-400" /> : null}
+                      </button>
+                    ))}
+                  </div>
+                </PopoverContent>
+              </Popover>
+            ) : (
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label={t('app.language')}
+                className="bg-gray-900 border border-gray-700 text-gray-100 hover:bg-gray-800 hover:text-gray-100"
+              >
+                <span className="text-xs font-semibold">{localeShort}</span>
+              </Button>
+            )}
 
             <Tooltip>
               <TooltipTrigger asChild>

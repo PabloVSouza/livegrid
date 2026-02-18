@@ -1,9 +1,10 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { FC } from 'react'
 import type { Livestream, LivestreamSource } from './types'
 import { useI18n } from './i18n'
+import { Volume2, VolumeX } from 'lucide-react'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -37,6 +38,9 @@ export const LivestreamPlayer: FC<LivestreamPlayerProps> = ({ stream, onRemove, 
   const { t } = useI18n()
   const [isConfirmOpen, setIsConfirmOpen] = useState(false)
   const [twitchParentHost, setTwitchParentHost] = useState('localhost')
+  const [isMuted, setIsMuted] = useState(true)
+  const [youtubeOrigin, setYoutubeOrigin] = useState('')
+  const iframeRef = useRef<HTMLIFrameElement | null>(null)
 
   const sources: LivestreamSource[] =
     stream.sources && stream.sources.length > 0
@@ -55,24 +59,62 @@ export const LivestreamPlayer: FC<LivestreamPlayerProps> = ({ stream, onRemove, 
   const activeSource =
     sources.find((source) => source.sourceId === stream.activeSourceId) || sources[0]
   const platform = activeSource.platform
+  const canFallbackByUnknownStatus = activeSource.isLive !== false
+  const youtubeParams = new URLSearchParams({
+    autoplay: '1',
+    controls: '0',
+    mute: '1',
+    rel: '0',
+    fs: '0',
+    disablekb: '1',
+    iv_load_policy: '3',
+    modestbranding: '1',
+    playsinline: '1',
+    enablejsapi: '1'
+  })
+  if (youtubeOrigin) {
+    youtubeParams.set('origin', youtubeOrigin)
+  }
   const embedUrl =
     platform === 'youtube'
       ? activeSource.videoId
-        ? `https://www.youtube.com/embed/${activeSource.videoId}?autoplay=1&controls=1&mute=1`
+        ? `https://www.youtube.com/embed/${activeSource.videoId}?${youtubeParams.toString()}`
+        : canFallbackByUnknownStatus && activeSource.channelId
+          ? `https://www.youtube.com/embed/live_stream?channel=${encodeURIComponent(activeSource.channelId)}&${youtubeParams.toString()}`
         : null
       : platform === 'twitch'
-        ? activeSource.channelId && activeSource.isLive
-          ? `https://player.twitch.tv/?channel=${encodeURIComponent(activeSource.channelId)}&parent=${encodeURIComponent(twitchParentHost)}&autoplay=true&muted=true`
+        ? canFallbackByUnknownStatus && activeSource.channelId
+          ? `https://player.twitch.tv/?channel=${encodeURIComponent(activeSource.channelId)}&parent=${encodeURIComponent(twitchParentHost)}&autoplay=true&muted=${isMuted ? 'true' : 'false'}`
           : null
-        : activeSource.channelId && activeSource.isLive
-          ? `https://player.kick.com/${encodeURIComponent(activeSource.channelId)}?autoplay=true&muted=true`
+        : canFallbackByUnknownStatus && activeSource.channelId
+          ? `https://player.kick.com/${encodeURIComponent(activeSource.channelId)}?autoplay=true&muted=${isMuted ? 'true' : 'false'}`
           : null
 
   useEffect(() => {
     if (typeof window !== 'undefined' && window.location.hostname) {
       setTwitchParentHost(window.location.hostname)
+      setYoutubeOrigin(window.location.origin)
     }
   }, [])
+
+  useEffect(() => {
+    const iframeWindow = iframeRef.current?.contentWindow
+    if (!iframeWindow || platform !== 'youtube' || !activeSource.videoId) return
+
+    iframeWindow.postMessage(
+      JSON.stringify({
+        event: 'command',
+        func: isMuted ? 'mute' : 'unMute',
+        args: []
+      }),
+      '*'
+    )
+  }, [platform, activeSource.videoId, isMuted])
+
+  const toggleMute = (): void => {
+    if (!embedUrl) return
+    setIsMuted((prev) => !prev)
+  }
 
   return (
     <div className="flex flex-col h-full bg-black overflow-hidden border-r border-b border-gray-800">
@@ -135,7 +177,19 @@ export const LivestreamPlayer: FC<LivestreamPlayerProps> = ({ stream, onRemove, 
 
       <div className="flex-1 bg-black relative">
         <div className="player-live-content w-full h-full">
-          {platform === 'youtube' && activeSource.consentRequired ? (
+          {embedUrl ? (
+            <iframe
+              key={`${platform}:${activeSource.sourceId}`}
+              ref={iframeRef}
+              src={embedUrl}
+              className="w-full h-full pointer-events-none"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
+              allowFullScreen
+              title={stream.title}
+              referrerPolicy="strict-origin-when-cross-origin"
+              tabIndex={-1}
+            />
+          ) : platform === 'youtube' && activeSource.consentRequired ? (
             <div className="w-full h-full flex flex-col items-center justify-center text-yellow-600 bg-gray-950">
               <svg className="w-12 h-12 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
@@ -150,15 +204,6 @@ export const LivestreamPlayer: FC<LivestreamPlayerProps> = ({ stream, onRemove, 
                 YouTube requires consent to check this channel
               </p>
             </div>
-          ) : embedUrl ? (
-            <iframe
-              src={embedUrl}
-              className="w-full h-full"
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
-              allowFullScreen
-              title={stream.title}
-              referrerPolicy="strict-origin-when-cross-origin"
-            />
           ) : (
             <div className="w-full h-full flex flex-col items-center justify-center text-gray-500">
               <p className="text-sm font-medium">{t('player.notStreaming')}</p>
@@ -168,6 +213,19 @@ export const LivestreamPlayer: FC<LivestreamPlayerProps> = ({ stream, onRemove, 
             </div>
           )}
         </div>
+        {embedUrl ? (
+          <button
+            type="button"
+            onClick={toggleMute}
+            className="absolute inset-0 z-10 cursor-pointer bg-transparent no-drag group"
+            title={isMuted ? 'Unmute' : 'Mute'}
+            aria-label={isMuted ? 'Unmute stream' : 'Mute stream'}
+          >
+            <span className="pointer-events-none absolute top-2 right-2 opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 rounded-full border border-gray-600/80 bg-black/55 p-1.5 text-gray-100 backdrop-blur-sm transition-opacity duration-150">
+              {isMuted ? <VolumeX className="h-3.5 w-3.5" /> : <Volume2 className="h-3.5 w-3.5" />}
+            </span>
+          </button>
+        ) : null}
         <div className="player-dummy-content absolute inset-0 hidden items-center justify-center bg-gray-950 text-gray-400 text-xs font-medium tracking-wide">
           {t('player.adjusting')}
         </div>
