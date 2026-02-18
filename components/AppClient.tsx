@@ -345,7 +345,7 @@ function AppClientContent() {
         if (cancelled || streams.length === 0) return
         setActiveProjectId(null)
         setSharedPreview({
-          name: payload.name?.trim() || 'Shared Preset',
+          name: payload.name?.trim() || t('app.sharedPresetDefaultName'),
           livestreams: mergeLivestreamList(streams)
         })
       })
@@ -456,7 +456,7 @@ function AppClientContent() {
       .filter((entry) => entry.sources.length > 0)
 
     const payload: SharedPresetPayload = {
-      name: currentProjectName || 'Shared Preset',
+      name: currentProjectName || t('app.sharedPresetDefaultName'),
       entries
     }
 

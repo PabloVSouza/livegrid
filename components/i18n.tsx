@@ -46,6 +46,7 @@ type TranslationKey =
   | 'app.shareLink'
   | 'app.copy'
   | 'app.copied'
+  | 'app.sharedPresetDefaultName'
   | 'app.projectPrompt'
   | 'app.renameProject'
   | 'app.projectDeleteConfirm'
@@ -110,6 +111,7 @@ const messages: Record<Locale, Partial<Record<TranslationKey, string>>> = {
     'app.shareLink': 'Shareable link',
     'app.copy': 'Copy',
     'app.copied': 'Copied',
+    'app.sharedPresetDefaultName': 'Shared preset',
     'app.projectPrompt': 'Project name',
     'app.renameProject': 'Rename project',
     'app.projectDeleteConfirm': 'Delete current project?',
@@ -175,6 +177,7 @@ const messages: Record<Locale, Partial<Record<TranslationKey, string>>> = {
     'app.shareLink': 'Link compartilhável',
     'app.copy': 'Copiar',
     'app.copied': 'Copiado',
+    'app.sharedPresetDefaultName': 'Preset compartilhado',
     'app.projectPrompt': 'Nome do projeto',
     'app.renameProject': 'Renomear projeto',
     'app.projectDeleteConfirm': 'Excluir o projeto atual?',
@@ -443,6 +446,9 @@ export const I18nProvider: FC<{ children: ReactNode }> = ({ children }) => {
   useEffect(() => {
     if (typeof window === 'undefined') return
     window.localStorage.setItem(LOCALE_STORAGE_KEY, locale)
+
+    const htmlLang = locale === 'pt-BR' ? 'pt-BR' : locale
+    document.documentElement.lang = htmlLang
   }, [locale])
 
   const value = useMemo<I18nContextValue>(

@@ -7,8 +7,24 @@ import { TooltipProvider } from '@ui/tooltip'
 
 export const metadata: Metadata = {
   title: 'LiveGrid by Pablo Souza',
-  description: 'Watch and monitor multiple YouTube livestream channels in one grid',
+  description:
+    'Monitor and watch multiple livestreams in one grid (YouTube, Twitch, Kick). Monitore várias lives em um único grid.',
   metadataBase: new URL('https://livegrid.pablosouza.dev'),
+  openGraph: {
+    title: 'LiveGrid by Pablo Souza',
+    description:
+      'Monitor and watch multiple livestreams in one grid (YouTube, Twitch, Kick). Monitore várias lives em um único grid.',
+    url: 'https://livegrid.pablosouza.dev',
+    siteName: 'LiveGrid',
+    locale: 'pt_BR',
+    type: 'website'
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'LiveGrid by Pablo Souza',
+    description:
+      'Monitor and watch multiple livestreams in one grid (YouTube, Twitch, Kick). Monitore várias lives em um único grid.'
+  },
   icons: {
     icon: [{ url: '/favicon.ico', sizes: '256x256', type: 'image/x-icon' }],
     shortcut: ['/favicon.ico'],
@@ -25,7 +41,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en">
+    <html lang="pt-BR">
       <body>
         <QueryProvider>
           <TooltipProvider>{children}</TooltipProvider>

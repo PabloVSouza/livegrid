@@ -139,8 +139,8 @@ export const WelcomeScreen: FC<WelcomeScreenProps> = ({
     >
       <button
         type="button"
-        aria-label="Channels"
-        title="Channels"
+        aria-label={channelsLabel}
+        title={channelsLabel}
         onClick={() => {
           setOpenDetailsId((current) => (current === detailsId ? null : detailsId))
         }}
