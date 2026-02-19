@@ -2,8 +2,6 @@
   <img src="./public/livegrid-logo.svg" alt="LiveGrid" width="420" />
 </p>
 
-<h1 align="center">LiveGrid by Pablo Souza</h1>
-
 <p align="center">
   Multi-platform livestream monitor with a dynamic CCTV-style grid.
 </p>
