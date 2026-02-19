@@ -5,58 +5,63 @@
 <h1 align="center">LiveGrid by Pablo Souza</h1>
 
 <p align="center">
-  Monitoramento multi-stream com layout dinâmico para YouTube, Twitch e Kick.
+  Multi-platform livestream monitor with a dynamic CCTV-style grid.
+</p>
+
+<p align="center">
+  <a href="https://livegrid.pablosouza.dev" target="_blank" rel="noreferrer">livegrid.pablosouza.dev</a>
 </p>
 
 ---
 
-## Sobre
+## Overview
 
-**LiveGrid** é um agregador de livestreams focado em acompanhar vários criadores ao mesmo tempo, com visual estilo CCTV e controle de layout em tempo real.
+LiveGrid helps you watch multiple creators at the same time in a single, interactive dashboard.
+It is designed for scenarios like group trips, collabs, and events where several channels go live together.
 
-O projeto foi pensado para cenários como viagens em grupo, collabs e eventos com múltiplos canais transmitindo simultaneamente.
+## Features
 
-## Principais recursos
-
-- Grid dinâmico com drag/resize de janelas.
-- Ajuste automático para manter tudo visível na viewport.
-- Layout salvo por projeto, com separação mobile/desktop.
-- Suporte a múltiplas plataformas por streamer:
+- Dynamic drag-and-resize grid layout
+- Automatic viewport fitting and layout persistence
+- Separate layout storage for desktop and mobile
+- Multi-platform support:
   - YouTube
   - Twitch
   - Kick
-- Troca de fonte (plataforma) na mesma box quando houver mais de uma disponível.
-- Presets internos (projetos em destaque).
-- Compartilhamento de projeto por URL (query param) + QR Code.
-- Importação de projeto compartilhado com um clique.
-- i18n com múltiplos idiomas e detecção de idioma do navegador.
-- Modal de About e fluxo de Welcome/Home.
+- Multiple sources per creator in the same tile (switch source in the title bar)
+- Featured presets + user projects
+- Share projects via URL (`preset` query param) and QR code
+- Import shared projects with one click
+- i18n with browser language detection and language switcher
 
-## Stack
+## Live Site
 
-- **Next.js 16** (App Router)
-- **React 19**
-- **TypeScript**
-- **Tailwind CSS 4**
-- **shadcn/ui + Radix UI**
-- **Lucide Icons**
-- **React Grid Layout**
-- **TanStack Query**
+- **Production:** https://livegrid.pablosouza.dev
 
-## Estrutura de pastas
+## Tech Stack
+
+- Next.js 16 (App Router)
+- React 19 + TypeScript
+- Tailwind CSS 4
+- shadcn/ui + Radix UI
+- Lucide icons
+- React Grid Layout
+- TanStack Query
+
+## Project Structure
 
 ```txt
-app/                  # rotas, layout, APIs server-side
-components/           # componentes da interface
-components/ui/        # componentes base (shadcn/ui)
-data/                 # presets e dados estáticos
-lib/                  # lógica compartilhada (domínio, rede, grid engine)
-public/               # assets estáticos (logo, ícones, imagens)
+app/                  # routes, layout, API handlers
+components/           # app components
+components/ui/        # shadcn/ui base components
+data/                 # presets and static data
+lib/                  # domain logic, network logic, grid engine
+public/               # static assets (logo, icons, preset images)
 ```
 
-## Aliases de import
+## Import Aliases
 
-Configurados no `tsconfig.json`:
+Configured in `tsconfig.json`:
 
 - `@app/*`
 - `@components/*`
@@ -65,21 +70,21 @@ Configurados no `tsconfig.json`:
 - `@lib/*`
 - `@/*`
 
-## Como rodar localmente
+## Getting Started
 
-### 1. Instalar dependências
+### 1. Install dependencies
 
 ```bash
 npm install
 ```
 
-### 2. Executar em desenvolvimento
+### 2. Run in development
 
 ```bash
 npm run dev
 ```
 
-### 3. Build de produção
+### 3. Build for production
 
 ```bash
 npm run build
@@ -94,63 +99,32 @@ npm run lint
 
 ## Deploy
 
-O projeto é compatível com **Vercel**.
+This project is Vercel-ready.
 
-- Deploy recomendado: conectar o repositório e usar o fluxo padrão do Next.js.
-- Domínio de produção planejado: `livegrid.pablosouza.dev`.
+- Connect the repository to Vercel
+- Keep default Next.js build settings
+- Set `NEXT_PUBLIC_SITE_URL` for canonical links and About page URL
 
-## Como funciona o status de live
+## Internationalization
 
-- O app usa rotas API internas em `app/api/*` para consultar status por plataforma.
-- Em vez de depender de chave da YouTube Data API para tudo, o fluxo prioriza resolução e checagens via endpoints server-side do próprio app.
-- O front atualiza status em lote com intervalo configurado (`REFRESH_INTERVAL_MS`).
-
-## Projetos e presets
-
-- O usuário pode criar projetos vazios ou importar presets.
-- Cada projeto armazena:
-  - nome
-  - canais/fontes
-  - layout
-- Presets compartilháveis podem ser abertos por query param (`preset=...`) e importados para a lista local.
-
-## Internacionalização (i18n)
-
-Idiomas suportados:
+Current language support:
 
 - English
-- Português (Brasil)
-- Español
-- Français
-- العربية
-- Русский
-- हिन्दी
-- বাংলা
-- اردو
-- 简体中文
+- Portuguese (Brazil)
+- Spanish
+- French
+- Arabic
+- Russian
+- Hindi
+- Bengali
+- Urdu
+- Simplified Chinese
 
-O idioma inicial é detectado pelo navegador e pode ser alterado pela UI.
+## Notes
 
-## UX e comportamento de layout
+- Live status is checked through internal API routes in `app/api/*`.
+- Shared projects are opened from URL and can be imported into local projects.
 
-- Grid com snapping e restrições de viewport.
-- Em mobile:
-  - foco em 1 coluna
-  - scroll para conteúdo completo
-  - comportamento otimizado para toque.
-- Durante interações de drag/resize, há placeholders para reduzir interferência dos players.
+## Credits
 
-## Roadmap sugerido
-
-- Telemetria de falhas por plataforma no live-check.
-- Melhorias na robustez de detecção de live em produção (datacenter/consent gate).
-- Testes automatizados para regras de layout.
-- E2E para fluxos críticos (import preset, share link, troca de fonte).
-
-## Créditos
-
-Desenvolvido por **Pablo Souza**.
-
----
-
-Se quiser contribuir, abra uma issue com contexto, passos para reproduzir e comportamento esperado.
+Built by **Pablo Souza**.

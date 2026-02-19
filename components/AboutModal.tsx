@@ -1,6 +1,7 @@
 'use client'
 
 import type { FC } from 'react'
+import Image from 'next/image'
 import { useI18n } from '@components/i18n'
 
 interface AboutModalProps {
@@ -9,6 +10,8 @@ interface AboutModalProps {
 }
 
 const WEBSITE_URL = process.env.NEXT_PUBLIC_SITE_URL?.trim() || 'https://livegrid.pablosouza.dev'
+const REPOSITORY_URL =
+  process.env.NEXT_PUBLIC_REPOSITORY_URL?.trim() || 'https://github.com/PabloVSouza/live-grid'
 
 export const AboutModal: FC<AboutModalProps> = ({ isOpen, onClose }) => {
   const { t } = useI18n()
@@ -20,7 +23,13 @@ export const AboutModal: FC<AboutModalProps> = ({ isOpen, onClose }) => {
       <div className="w-full max-w-2xl bg-gray-900 border border-gray-700 rounded-xl overflow-hidden">
         <div className="bg-gray-950/80 border-b border-gray-800 px-5 py-4 flex items-start justify-between gap-4">
           <div className="min-w-0">
-            <img src="/livegrid-logo.svg" alt="LiveGrid logo" className="h-10 w-auto" />
+            <Image
+              src="/livegrid-logo.svg"
+              alt="LiveGrid logo"
+              width={220}
+              height={48}
+              className="h-10 w-auto"
+            />
           </div>
           <button
             onClick={onClose}
@@ -46,6 +55,19 @@ export const AboutModal: FC<AboutModalProps> = ({ isOpen, onClose }) => {
               <p className="text-white">Next.js, React, TypeScript, react-grid-layout</p>
             </div>
           </div>
+
+          <div className="bg-gray-950/50 border border-gray-800 rounded-lg p-3">
+            <p className="text-gray-400 mb-1">{t('about.repository')}</p>
+            <a
+              href={REPOSITORY_URL}
+              target="_blank"
+              rel="noreferrer"
+              className="text-blue-400 hover:text-blue-300 underline break-all"
+            >
+              {REPOSITORY_URL}
+            </a>
+          </div>
+
 
           <div className="bg-gray-950/50 border border-gray-800 rounded-lg p-3">
             <p className="text-gray-400 mb-1">{t('about.website')}</p>

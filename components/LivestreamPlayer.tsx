@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useId, useRef, useState } from 'react'
+import Image from 'next/image'
 import type { FC } from 'react'
 import { useI18n } from '@components/i18n'
 import type { Livestream, LivestreamSource } from '@components/types'
@@ -423,9 +424,11 @@ export const LivestreamPlayer: FC<LivestreamPlayerProps> = ({ stream, onRemove, 
                   }`}
                 >
                   <span className={source.isLive ? 'text-red-400' : 'text-gray-500'}>●</span>
-                  <img
+                  <Image
                     src={getPlatformIconSrc(source.platform)}
                     alt={source.platform}
+                    width={14}
+                    height={14}
                     className="inline-block ml-1 h-3.5 w-3.5 align-middle"
                     draggable={false}
                   />

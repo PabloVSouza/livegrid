@@ -1,10 +1,11 @@
-"use client"
+'use client'
 
-import { useEffect, useState } from "react"
-import type { FC } from "react"
-import type { PresetDefinition } from "@data/presets"
-import { Button } from "@ui/button"
-import { Info, Pencil, Trash2 } from "lucide-react"
+import { useEffect, useState } from 'react'
+import type { FC } from 'react'
+import Image from 'next/image'
+import type { PresetDefinition } from '@data/presets'
+import { Button } from '@ui/button'
+import { Info, Pencil, Trash2 } from 'lucide-react'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -13,13 +14,13 @@ import {
   AlertDialogDescription,
   AlertDialogFooter,
   AlertDialogHeader,
-  AlertDialogTitle,
-} from "@ui/alert-dialog"
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@ui/dialog"
+  AlertDialogTitle
+} from '@ui/alert-dialog'
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@ui/dialog'
 
 interface ChannelPreview {
   title: string
-  platforms: Array<"youtube" | "twitch" | "kick">
+  platforms: Array<'youtube' | 'twitch' | 'kick'>
 }
 interface ProjectPreview {
   id: string
@@ -80,7 +81,7 @@ export const WelcomeScreen: FC<WelcomeScreenProps> = ({
   const [pendingDeleteProject, setPendingDeleteProject] = useState<ProjectPreview | null>(null)
   const [openDetailsId, setOpenDetailsId] = useState<string | null>(null)
   const [pendingRenameProject, setPendingRenameProject] = useState<ProjectPreview | null>(null)
-  const [renameValue, setRenameValue] = useState("")
+  const [renameValue, setRenameValue] = useState('')
 
   useEffect(() => {
     const onPointerDown = (event: MouseEvent | TouchEvent) => {
@@ -90,31 +91,31 @@ export const WelcomeScreen: FC<WelcomeScreenProps> = ({
       setOpenDetailsId(null)
     }
 
-    document.addEventListener("mousedown", onPointerDown)
-    document.addEventListener("touchstart", onPointerDown)
+    document.addEventListener('mousedown', onPointerDown)
+    document.addEventListener('touchstart', onPointerDown)
     return () => {
-      document.removeEventListener("mousedown", onPointerDown)
-      document.removeEventListener("touchstart", onPointerDown)
+      document.removeEventListener('mousedown', onPointerDown)
+      document.removeEventListener('touchstart', onPointerDown)
     }
   }, [])
 
-  const getPlatformId = (source: string): "youtube" | "twitch" | "kick" => {
+  const getPlatformId = (source: string): 'youtube' | 'twitch' | 'kick' => {
     const input = source.trim().toLowerCase()
-    if (input.startsWith("twitch:") || input.includes("twitch.tv/")) return "twitch"
-    if (input.startsWith("kick:") || input.includes("kick.com/")) return "kick"
-    return "youtube"
+    if (input.startsWith('twitch:') || input.includes('twitch.tv/')) return 'twitch'
+    if (input.startsWith('kick:') || input.includes('kick.com/')) return 'kick'
+    return 'youtube'
   }
 
-  const getPlatformIconSrc = (platform: "youtube" | "twitch" | "kick"): string => {
-    if (platform === "youtube") return "/platforms/youtube.svg"
-    if (platform === "twitch") return "/platforms/twitch.svg"
-    return "/platforms/kick.svg"
+  const getPlatformIconSrc = (platform: 'youtube' | 'twitch' | 'kick'): string => {
+    if (platform === 'youtube') return '/platforms/youtube.svg'
+    if (platform === 'twitch') return '/platforms/twitch.svg'
+    return '/platforms/kick.svg'
   }
 
   const getPresetEntries = (preset: PresetDefinition): ChannelPreview[] => {
     const entries =
       preset.entries?.map((entry) => ({
-        title: entry.title?.trim() || entry.sources[0] || "Channel",
+        title: entry.title?.trim() || entry.sources[0] || 'Channel',
         sources: entry.sources
       })) ??
       (preset.channels ?? []).map((channel) => ({
@@ -133,10 +134,7 @@ export const WelcomeScreen: FC<WelcomeScreenProps> = ({
     channels: ChannelPreview[]
     className?: string
   }> = ({ detailsId, channels, className }) => (
-    <div
-      data-channel-details-root="true"
-      className={`relative ${className ?? ""}`}
-    >
+    <div data-channel-details-root="true" className={`relative ${className ?? ''}`}>
       <button
         type="button"
         aria-label={channelsLabel}
@@ -156,10 +154,12 @@ export const WelcomeScreen: FC<WelcomeScreenProps> = ({
                 <p className="text-gray-100 font-medium truncate">{channel.title}</p>
                 <div className="mt-1 flex items-center gap-1">
                   {channel.platforms.map((platform, platformIndex) => (
-                    <img
+                    <Image
                       key={`${detailsId}-${index}-${platformIndex}`}
                       src={getPlatformIconSrc(platform)}
                       alt={platform}
+                      width={14}
+                      height={14}
                       className="h-3.5 w-3.5"
                       draggable={false}
                     />
@@ -177,20 +177,23 @@ export const WelcomeScreen: FC<WelcomeScreenProps> = ({
     <div
       className="relative w-full h-full overflow-auto bg-black"
       style={{
-        backgroundColor: "#030712",
+        backgroundColor: '#030712',
         backgroundImage:
-          "linear-gradient(to right, rgba(59,130,246,0.12) 1px, transparent 1px), linear-gradient(to bottom, rgba(59,130,246,0.12) 1px, transparent 1px)",
-        backgroundSize: "320px 180px",
-        backgroundPosition: "0 0, 0 0"
+          'linear-gradient(to right, rgba(59,130,246,0.12) 1px, transparent 1px), linear-gradient(to bottom, rgba(59,130,246,0.12) 1px, transparent 1px)',
+        backgroundSize: '320px 180px',
+        backgroundPosition: '0 0, 0 0'
       }}
     >
       <div className="pointer-events-none absolute inset-0 z-0 flex items-center justify-center">
-        <img
+        <Image
           src="/livegrid-logo.svg"
           alt=""
           aria-hidden="true"
-          className="w-[70vw] max-w-4xl min-w-64 opacity-[0.06] grayscale contrast-125 saturate-0 select-none"
+          width={1400}
+          height={320}
+          className="w-[70vw] max-w-4xl min-w-64 h-auto opacity-[0.06] grayscale contrast-125 saturate-0 select-none"
           draggable={false}
+          priority
         />
       </div>
       <div className="relative z-10 max-w-6xl mx-auto px-6 py-10">
@@ -219,7 +222,7 @@ export const WelcomeScreen: FC<WelcomeScreenProps> = ({
                     <div className="min-w-0 flex items-center gap-1">
                       <h4
                         className="text-white font-semibold truncate"
-                        style={{ fontFamily: "Roboto, system-ui, sans-serif" }}
+                        style={{ fontFamily: 'Roboto, system-ui, sans-serif' }}
                       >
                         {project.name}
                       </h4>
@@ -257,7 +260,10 @@ export const WelcomeScreen: FC<WelcomeScreenProps> = ({
                       channels={project.channels}
                     />
                   </div>
-                  <Button onClick={() => onOpenProject(project.id)} className="w-full bg-gray-800 hover:bg-gray-700 text-white">
+                  <Button
+                    onClick={() => onOpenProject(project.id)}
+                    className="w-full bg-gray-800 hover:bg-gray-700 text-white"
+                  >
                     {openProjectLabel}
                   </Button>
                 </div>
@@ -274,7 +280,15 @@ export const WelcomeScreen: FC<WelcomeScreenProps> = ({
                 key={preset.id}
                 className="bg-gray-900 border border-gray-800 rounded-lg overflow-visible flex flex-col"
               >
-                <img src={preset.image} alt={preset.name} className="w-full h-40 object-cover rounded-t-lg" />
+                <div className="relative w-full h-40">
+                  <Image
+                    src={preset.image}
+                    alt={preset.name}
+                    fill
+                    sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                    className="object-cover rounded-t-lg"
+                  />
+                </div>
                 <div className="p-4 flex-1 flex flex-col">
                   <h4 className="text-white font-semibold mb-1">{preset.name}</h4>
                   <p className="text-gray-400 text-sm mb-3 flex-1">{preset.description}</p>
@@ -313,14 +327,14 @@ export const WelcomeScreen: FC<WelcomeScreenProps> = ({
             <AlertDialogDescription className="text-gray-300">
               {deleteProjectConfirm}
               {pendingDeleteProject ? (
-                <span className="block mt-2 text-white font-medium">{pendingDeleteProject.name}</span>
+                <span className="block mt-2 text-white font-medium">
+                  {pendingDeleteProject.name}
+                </span>
               ) : null}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel
-              className="bg-gray-800 border-gray-700 text-gray-100 hover:bg-gray-700 hover:text-gray-100"
-            >
+            <AlertDialogCancel className="bg-gray-800 border-gray-700 text-gray-100 hover:bg-gray-700 hover:text-gray-100">
               {cancelLabel}
             </AlertDialogCancel>
             <AlertDialogAction
@@ -342,7 +356,7 @@ export const WelcomeScreen: FC<WelcomeScreenProps> = ({
         onOpenChange={(open) => {
           if (!open) {
             setPendingRenameProject(null)
-            setRenameValue("")
+            setRenameValue('')
           }
         }}
       >
@@ -355,11 +369,11 @@ export const WelcomeScreen: FC<WelcomeScreenProps> = ({
             onChange={(event) => setRenameValue(event.target.value)}
             className="w-full px-2 py-1 bg-gray-800 border border-gray-700 text-sm rounded focus:outline-none focus:border-blue-500 transition"
             onKeyDown={(event) => {
-              if (event.key === "Enter" && pendingRenameProject && renameValue.trim()) {
+              if (event.key === 'Enter' && pendingRenameProject && renameValue.trim()) {
                 event.preventDefault()
                 onRenameProject(pendingRenameProject.id, renameValue.trim())
                 setPendingRenameProject(null)
-                setRenameValue("")
+                setRenameValue('')
               }
             }}
           />
@@ -369,7 +383,7 @@ export const WelcomeScreen: FC<WelcomeScreenProps> = ({
               variant="ghost"
               onClick={() => {
                 setPendingRenameProject(null)
-                setRenameValue("")
+                setRenameValue('')
               }}
               className="bg-gray-900 border border-gray-700 text-gray-100 hover:bg-gray-800 hover:text-gray-100"
             >
@@ -381,7 +395,7 @@ export const WelcomeScreen: FC<WelcomeScreenProps> = ({
                 if (!pendingRenameProject || !renameValue.trim()) return
                 onRenameProject(pendingRenameProject.id, renameValue.trim())
                 setPendingRenameProject(null)
-                setRenameValue("")
+                setRenameValue('')
               }}
               className="bg-blue-600 text-white hover:bg-blue-700 hover:text-white"
             >
