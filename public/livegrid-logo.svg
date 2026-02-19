@@ -45,7 +45,7 @@
           font-size="380"
           font-weight="800"
           fill="#ffffff"
-          letter-spacing="-2">Live Grid</text>
+          letter-spacing="-2">LiveGrid</text>
     <!-- Red dot over the "i" in Live -->
     <circle cx="753" cy="96" r="40" fill="#ff3b30"/>
   </g>
