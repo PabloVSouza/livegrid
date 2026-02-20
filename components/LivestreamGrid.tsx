@@ -44,6 +44,7 @@ export const LivestreamGrid: FC<Props> = ({ livestreams, onRemove, onSelectSourc
   const resizeRejectedRef = useRef(false)
   const resizeGrewRef = useRef(false)
   const interactionItemIdRef = useRef<string | null>(null)
+  const dragStartLayoutRef = useRef<LayoutItem[] | null>(null)
   const modeLayoutStorageKey = `${layoutStorageKey}_${gridSize.width < 768 ? "mobile" : "desktop"}`
 
   useEffect(() => {
@@ -84,10 +85,13 @@ export const LivestreamGrid: FC<Props> = ({ livestreams, onRemove, onSelectSourc
   }, [metrics, manualMaxRow, livestreams.length])
 
   const interactionRows = useMemo(() => {
-    if (metrics.isMobile) return dynamicRowsBase
+    if (metrics.isMobile) {
+      if (!isInteracting) return dynamicRowsBase
+      return Math.max(dynamicRowsBase, metrics.rows + Math.max(2, livestreams.length))
+    }
     if (!isInteracting) return dynamicRowsBase
     return Math.max(dynamicRowsBase, metrics.rows + 12)
-  }, [metrics, dynamicRowsBase, isInteracting])
+  }, [metrics, dynamicRowsBase, isInteracting, livestreams.length])
 
   const layoutMetrics = useMemo(
     () => ({ ...metrics, rows: interactionRows }),
@@ -212,10 +216,100 @@ export const LivestreamGrid: FC<Props> = ({ livestreams, onRemove, onSelectSourc
     interactionItemIdRef.current = null
   }
 
+  const cellsOverlap = (a: LayoutItem, b: LayoutItem): boolean => {
+    return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y
+  }
+
+  const tryBuildSwapLayout = (
+    startLayout: LayoutItem[],
+    draggedId: string,
+    dropped: LayoutItem,
+    streamIds: Set<string>
+  ): LayoutItem[] | null => {
+    const normalizedStart = sanitizeLayoutFromGrid(startLayout, streamIds, layoutMetrics)
+    const draggedStart = normalizedStart.find((item) => item.i === draggedId)
+    if (!draggedStart) return null
+
+    const probe: LayoutItem = {
+      ...draggedStart,
+      x: dropped.x,
+      y: dropped.y,
+      w: dropped.w,
+      h: dropped.h
+    }
+
+    let bestTarget: LayoutItem | null = null
+    let bestArea = 0
+
+    for (const candidate of normalizedStart) {
+      if (candidate.i === draggedId) continue
+      if (candidate.w !== draggedStart.w || candidate.h !== draggedStart.h) continue
+      if (!cellsOverlap(probe, candidate)) continue
+
+      const overlapW = Math.max(0, Math.min(probe.x + probe.w, candidate.x + candidate.w) - Math.max(probe.x, candidate.x))
+      const overlapH = Math.max(0, Math.min(probe.y + probe.h, candidate.y + candidate.h) - Math.max(probe.y, candidate.y))
+      const overlapArea = overlapW * overlapH
+      if (overlapArea > bestArea) {
+        bestArea = overlapArea
+        bestTarget = candidate
+      }
+    }
+
+    if (!bestTarget || bestArea === 0) return null
+
+    const swapped = normalizedStart.map((item) => {
+      if (item.i === draggedStart.i) {
+        return { ...item, x: bestTarget.x, y: bestTarget.y }
+      }
+      if (item.i === bestTarget.i) {
+        return { ...item, x: draggedStart.x, y: draggedStart.y }
+      }
+      return item
+    })
+
+    return metrics.isMobile ? packMobileNoGaps(swapped, streamIds) : swapped
+  }
+
+  const reorderMobileLayout = (
+    currentLayout: LayoutItem[],
+    draggedId: string,
+    targetIndex: number,
+    streamIds: Set<string>
+  ): LayoutItem[] => {
+    const ordered = currentLayout
+      .filter((item) => streamIds.has(item.i))
+      .sort((a, b) => a.y - b.y || a.x - b.x)
+
+    const dragged = ordered.find((item) => item.i === draggedId)
+    if (!dragged) {
+      return packMobileNoGaps(currentLayout, streamIds)
+    }
+
+    const withoutDragged = ordered.filter((item) => item.i !== draggedId)
+    const index = Math.max(0, Math.min(Math.round(targetIndex), withoutDragged.length))
+
+    withoutDragged.splice(index, 0, {
+      ...dragged,
+      x: 0,
+      y: index,
+      w: 1,
+      h: 1
+    })
+
+    return withoutDragged.map((item, idx) => ({
+      ...item,
+      x: 0,
+      y: idx,
+      w: 1,
+      h: 1
+    }))
+  }
+
   const onDragStart = (layoutArg: unknown, oldItemArg: unknown, newItemArg: unknown) => {
     void layoutArg
     void oldItemArg
     onInteractionStart()
+    dragStartLayoutRef.current = layout
     if (newItemArg && typeof newItemArg === "object") {
       interactionItemIdRef.current = (newItemArg as LayoutItem).i ?? null
     } else {
@@ -224,9 +318,51 @@ export const LivestreamGrid: FC<Props> = ({ livestreams, onRemove, onSelectSourc
   }
 
   const onDragStop = (layoutArg: unknown, oldItemArg: unknown, newItemArg: unknown) => {
+    const streamIds = new Set(livestreams.map((stream) => stream.id))
+    const droppedItem = newItemArg && typeof newItemArg === "object" ? (newItemArg as LayoutItem) : null
+    const draggedId = droppedItem?.i ?? null
+
+    if (draggedId && droppedItem && dragStartLayoutRef.current) {
+      const swapped = tryBuildSwapLayout(dragStartLayoutRef.current, draggedId, droppedItem, streamIds)
+      if (swapped) {
+        isInteractingRef.current = false
+        setIsInteracting(false)
+        setIsResizeInvalid(false)
+        const safeSwap = hasOutOfBounds(swapped, layoutMetrics)
+          ? repairLayoutToVisible(swapped, streamIds, layoutMetrics, draggedId)
+          : swapped
+        setManualLayout(safeSwap)
+        saveStoredManualLayout(modeLayoutStorageKey, safeSwap)
+        lastValidLayoutRef.current = safeSwap
+        interactionItemIdRef.current = null
+        dragStartLayoutRef.current = null
+        return
+      }
+    }
+
+    if (metrics.isMobile) {
+      isInteractingRef.current = false
+      setIsInteracting(false)
+      setIsResizeInvalid(false)
+
+      const sourceLayout = Array.isArray(layoutArg) ? (layoutArg as LayoutItem[]) : layout
+      const targetY = droppedItem?.y ?? 0
+
+      const next = draggedId
+        ? reorderMobileLayout(sourceLayout, draggedId, targetY, streamIds)
+        : packMobileNoGaps(sourceLayout, streamIds)
+
+      setManualLayout(next)
+      saveStoredManualLayout(modeLayoutStorageKey, next)
+      lastValidLayoutRef.current = next
+      interactionItemIdRef.current = null
+      dragStartLayoutRef.current = null
+      return
+    }
+
     void oldItemArg
-    const prioritizedId =
-      newItemArg && typeof newItemArg === "object" ? ((newItemArg as LayoutItem).i ?? null) : null
+    const prioritizedId = droppedItem?.i ?? null
+    dragStartLayoutRef.current = null
     commitLayout(layoutArg, "drag", prioritizedId)
   }
 

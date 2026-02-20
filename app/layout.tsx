@@ -10,6 +10,7 @@ export const metadata: Metadata = {
   description:
     'Monitor and watch multiple livestreams in one grid (YouTube, Twitch, Kick). Monitore várias lives em um único grid.',
   metadataBase: new URL('https://livegrid.pablosouza.dev'),
+  manifest: '/manifest.webmanifest',
   openGraph: {
     title: 'LiveGrid by Pablo Souza',
     description:
@@ -26,9 +27,18 @@ export const metadata: Metadata = {
       'Monitor and watch multiple livestreams in one grid (YouTube, Twitch, Kick). Monitore várias lives em um único grid.'
   },
   icons: {
-    icon: [{ url: '/favicon.ico', sizes: '256x256', type: 'image/x-icon' }],
+    icon: [
+      { url: '/favicon.ico', sizes: '256x256', type: 'image/x-icon' },
+      { url: '/pwa-192.png', sizes: '192x192', type: 'image/png' },
+      { url: '/pwa-512.png', sizes: '512x512', type: 'image/png' }
+    ],
     shortcut: ['/favicon.ico'],
-    apple: [{ url: '/favicon.ico' }]
+    apple: [{ url: '/pwa-192.png', sizes: '192x192', type: 'image/png' }]
+  },
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'black-translucent',
+    title: 'LiveGrid'
   }
 }
 

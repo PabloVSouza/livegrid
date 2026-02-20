@@ -2,7 +2,7 @@
 
 import { useEffect, useId, useRef, useState } from 'react'
 import Image from 'next/image'
-import type { FC } from 'react'
+import type { FC, PointerEvent as ReactPointerEvent } from 'react'
 import { useI18n } from '@components/i18n'
 import type { Livestream, LivestreamSource } from '@components/types'
 import { RotateCw, Volume2, VolumeX } from 'lucide-react'
@@ -106,6 +106,7 @@ export const LivestreamPlayer: FC<LivestreamPlayerProps> = ({ stream, onRemove, 
   const twitchHasStartedRef = useRef(false)
   const twitchPlayAttemptsRef = useRef(0)
   const lastYoutubeResumeAttemptRef = useRef(0)
+  const lastTapRef = useRef<{ time: number; x: number; y: number }>({ time: 0, x: 0, y: 0 })
   const twitchContainerId = useId().replace(/:/g, '_')
 
   const sources: LivestreamSource[] =
@@ -421,12 +422,35 @@ export const LivestreamPlayer: FC<LivestreamPlayerProps> = ({ stream, onRemove, 
   }
 
 
+  const handleMobileDoubleTap = (event: ReactPointerEvent<HTMLDivElement>): void => {
+    if (event.pointerType !== 'touch') return
+    const target = event.target as HTMLElement | null
+    if (target?.closest('.no-drag')) return
+
+    const now = Date.now()
+    const last = lastTapRef.current
+    const dx = Math.abs(event.clientX - last.x)
+    const dy = Math.abs(event.clientY - last.y)
+    const isDoubleTap = now - last.time < 350 && dx < 24 && dy < 24
+
+    if (isDoubleTap) {
+      event.preventDefault()
+      void toggleFullscreen()
+      lastTapRef.current = { time: 0, x: 0, y: 0 }
+      return
+    }
+
+    lastTapRef.current = { time: now, x: event.clientX, y: event.clientY }
+  }
+
+
   return (
     <div ref={rootRef} className="flex flex-col h-full bg-black overflow-hidden border-r border-b border-gray-800">
       <div
         className="drag-handle h-6 flex items-center justify-between bg-gray-900 px-2 border-b border-gray-800 cursor-move select-none"
         style={{ touchAction: 'none' }}
         onDoubleClick={() => void toggleFullscreen()}
+        onPointerUp={handleMobileDoubleTap}
       >
         <div className="flex items-center gap-2 min-w-0 flex-1">
           <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse shrink-0" />
@@ -483,7 +507,11 @@ export const LivestreamPlayer: FC<LivestreamPlayerProps> = ({ stream, onRemove, 
         </button>
       </div>
 
-      <div className="flex-1 bg-black relative" onDoubleClick={() => void toggleFullscreen()}>
+      <div
+        className="flex-1 bg-black relative"
+        onDoubleClick={() => void toggleFullscreen()}
+        onPointerUp={handleMobileDoubleTap}
+      >
         <div className="player-live-content w-full h-full">
           {embedUrl ? (
             platform === 'twitch' ? (
@@ -500,7 +528,6 @@ export const LivestreamPlayer: FC<LivestreamPlayerProps> = ({ stream, onRemove, 
                 src={embedUrl}
                 className="w-full h-full pointer-events-none"
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
-                allowFullScreen
                 title={stream.title}
                 referrerPolicy="strict-origin-when-cross-origin"
                 tabIndex={-1}

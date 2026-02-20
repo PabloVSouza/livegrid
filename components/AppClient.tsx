@@ -49,7 +49,8 @@ import {
   DialogTitle
 } from '@ui/dialog'
 import { Popover, PopoverContent, PopoverTrigger } from '@ui/popover'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@ui/tooltip'
+import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@ui/sheet'
+import { Drawer, DrawerContent, DrawerDescription, DrawerTitle } from '@ui/drawer'
 import { CirclePlus, Copy, Download, House, Info, Languages, MessageSquareText, Pencil, Share2, X } from 'lucide-react'
 
 
@@ -67,6 +68,7 @@ function AppClientContent() {
   const [isLoadingSharedPreview, setIsLoadingSharedPreview] = useState(false)
   const [isHydrated, setIsHydrated] = useState(false)
   const [isClientMounted, setIsClientMounted] = useState(false)
+  const [isDesktop, setIsDesktop] = useState(false)
   const [isAboutOpen, setIsAboutOpen] = useState(false)
   const [isRenameOpen, setIsRenameOpen] = useState(false)
   const [isShareOpen, setIsShareOpen] = useState(false)
@@ -94,6 +96,20 @@ function AppClientContent() {
 
   useEffect(() => {
     setIsClientMounted(true)
+  }, [])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    const media = window.matchMedia('(min-width: 768px)')
+    const onChange = (event: MediaQueryListEvent) => setIsDesktop(event.matches)
+
+    setIsDesktop(media.matches)
+    media.addEventListener('change', onChange)
+
+    return () => {
+      media.removeEventListener('change', onChange)
+    }
   }, [])
 
   useEffect(() => {
@@ -384,11 +400,17 @@ function AppClientContent() {
     })
   }, [selectedChatUrl])
 
+
   const toggleChatPanel = (): void => {
     setIsChatOpen((prev) => {
       const next = !prev
       if (next) {
-        setSelectedChatStreamId(chatCandidates[0]?.streamId ?? null)
+        const hasCurrent = selectedChatStreamId
+          ? chatCandidates.some((candidate) => candidate.streamId === selectedChatStreamId)
+          : false
+        if (!hasCurrent) {
+          setSelectedChatStreamId(chatCandidates[0]?.streamId ?? null)
+        }
       }
       return next
     })
@@ -846,6 +868,7 @@ function AppClientContent() {
     return null
   }, [isHydrated, isLoadingSharedPreview, isImportingPresetId, t])
 
+
   return (
     <div className="w-screen h-screen bg-black text-white flex flex-col">
       <header className="bg-black border-b border-gray-800 px-3 py-2 min-h-16 overflow-hidden">
@@ -867,8 +890,6 @@ function AppClientContent() {
                 >
                   {currentProjectName}
                 </p>
-                <Tooltip>
-                  <TooltipTrigger asChild>
                     <Button
                       variant="ghost"
                       size="icon"
@@ -882,9 +903,7 @@ function AppClientContent() {
                     >
                     <Pencil className="size-4" />
                   </Button>
-                </TooltipTrigger>
-                <TooltipContent>{t('app.renameProject')}</TooltipContent>
-              </Tooltip>
+
               <URLInput
                 onAddMany={addLivestreams}
                 trigger={
@@ -893,7 +912,7 @@ function AppClientContent() {
                     size="sm"
                     aria-label={t('input.addChannel')}
                     title={t('input.addChannel')}
-                    className="bg-blue-600 border border-blue-500 text-white hover:bg-blue-700 hover:text-white"
+                    className="bg-gray-900 border border-blue-500/70 text-blue-100 hover:bg-blue-900/30 hover:text-white shadow-[0_0_0_1px_rgba(59,130,246,0.25)]"
                   >
                     <CirclePlus className="size-4 mr-1" />
                     {t('input.addChannel')}
@@ -901,8 +920,6 @@ function AppClientContent() {
                 }
               />
               {!!activeProject && activeLivestreams.length > 0 && (
-                <Tooltip>
-                  <TooltipTrigger asChild>
                     <Button
                       variant="ghost"
                       size="icon"
@@ -913,13 +930,9 @@ function AppClientContent() {
                     >
                       <Share2 className="size-4" />
                     </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>{t('app.share')}</TooltipContent>
-                </Tooltip>
+
               )}
               {activeLivestreams.length > 0 && (
-                <Tooltip>
-                  <TooltipTrigger asChild>
                     <Button
                       variant="ghost"
                       size="icon"
@@ -930,13 +943,9 @@ function AppClientContent() {
                     >
                       <MessageSquareText className="size-4" />
                     </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>{t('app.chat')}</TooltipContent>
-                </Tooltip>
+
               )}
               {isSharedPreviewMode && (
-                <Tooltip>
-                  <TooltipTrigger asChild>
                     <Button
                       variant="ghost"
                       size="icon"
@@ -947,17 +956,13 @@ function AppClientContent() {
                     >
                       <Download className="size-4" />
                     </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>{t('app.importShared')}</TooltipContent>
-                </Tooltip>
+
               )}
             </div>
           )}
           </div>
           <div className="flex items-center gap-2 shrink-0">
             {!isWelcomeMode && (
-              <Tooltip>
-                <TooltipTrigger asChild>
                 <Button
                   variant="ghost"
                   size="icon"
@@ -971,28 +976,21 @@ function AppClientContent() {
                   >
                     <House className="size-4" />
                   </Button>
-                </TooltipTrigger>
-                <TooltipContent>{t('app.projects')}</TooltipContent>
-              </Tooltip>
+
             )}
 
             {isClientMounted ? (
               <Popover>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        aria-label={t('app.language')}
-                        className="bg-gray-900 border border-gray-700 text-gray-100 hover:bg-gray-800 hover:text-gray-100"
-                      >
-                        <span className="text-xs font-semibold">{localeShort}</span>
-                      </Button>
-                    </PopoverTrigger>
-                  </TooltipTrigger>
-                  <TooltipContent>{t('app.language')}</TooltipContent>
-                </Tooltip>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label={t('app.language')}
+                    className="bg-gray-900 border border-gray-700 text-gray-100 hover:bg-gray-800 hover:text-gray-100"
+                  >
+                    <span className="text-xs font-semibold">{localeShort}</span>
+                  </Button>
+                </PopoverTrigger>
                 <PopoverContent align="end" className="w-56 bg-gray-900 border-gray-700 p-1">
                   <div className="max-h-72 overflow-auto">
                     {locales.map((option) => (
@@ -1023,9 +1021,6 @@ function AppClientContent() {
                 <span className="text-xs font-semibold">{localeShort}</span>
               </Button>
             )}
-
-            <Tooltip>
-              <TooltipTrigger asChild>
                 <Button
                   variant="ghost"
                   size="icon"
@@ -1035,9 +1030,7 @@ function AppClientContent() {
                 >
                   <Info className="size-4" />
                 </Button>
-              </TooltipTrigger>
-              <TooltipContent>{t('app.about')}</TooltipContent>
-            </Tooltip>
+
           </div>
         </div>
         {!isWelcomeMode && (
@@ -1069,7 +1062,7 @@ function AppClientContent() {
                   size="sm"
                   aria-label={t('input.addChannel')}
                   title={t('input.addChannel')}
-                  className="h-6 px-2 bg-blue-600 border border-blue-500 text-white hover:bg-blue-700 hover:text-white"
+                  className="h-6 px-2 bg-gray-900 border border-blue-500/70 text-blue-100 hover:bg-blue-900/30 hover:text-white shadow-[0_0_0_1px_rgba(59,130,246,0.25)]"
                 >
                   <CirclePlus className="size-3.5" />
                 </Button>
@@ -1163,87 +1156,204 @@ function AppClientContent() {
         )}
       </main>
 
-      {isChatOpen && !isWelcomeMode && (
-        <aside className="fixed right-0 top-16 bottom-0 z-40 w-80 max-w-[92vw] border-l border-gray-800 bg-gray-950/95 backdrop-blur-sm flex flex-col">
-          <div className="px-3 py-2 border-b border-gray-800 flex items-center justify-between gap-2">
-            <p className="text-sm font-semibold text-gray-100">{t('app.chat')}</p>
-            <button
-              type="button"
-              onClick={() => setIsChatOpen(false)}
-              aria-label={t('input.cancel')}
-              className="h-7 w-7 inline-flex items-center justify-center rounded text-gray-300 hover:bg-gray-800 hover:text-white"
+      {!isWelcomeMode && isClientMounted && (
+        isDesktop ? (
+          <Sheet open={isChatOpen} onOpenChange={setIsChatOpen}>
+            <SheetContent
+              side="right"
+              showCloseButton={false}
+              overlayClassName="bg-transparent pointer-events-none"
+              className="w-[360px] sm:max-w-[360px] border-l border-gray-800 bg-gray-950/95 backdrop-blur-sm p-0"
             >
-              <X className="size-4" />
-            </button>
-          </div>
+              <SheetTitle className="sr-only">{t('app.chat')}</SheetTitle>
+              <SheetDescription className="sr-only">{t('chat.selectChannel')}</SheetDescription>
+              <div className="h-full min-h-0 flex flex-col overflow-hidden">
+                <div className="px-3 py-2 border-b border-gray-800 flex items-center justify-between gap-2">
+                  <p className="text-sm font-semibold text-gray-100">{t('app.chat')}</p>
+                  <button
+                    type="button"
+                    onClick={() => setIsChatOpen(false)}
+                    aria-label={t('input.cancel')}
+                    className="h-7 w-7 inline-flex items-center justify-center rounded text-gray-300 hover:bg-gray-800 hover:text-white"
+                  >
+                    <X className="size-4" />
+                  </button>
+                </div>
 
-          <div className="px-3 py-2 border-b border-gray-800 flex items-center gap-2 overflow-x-auto">
-            {chatCandidates.map((candidate) => {
-              const isActive = candidate.streamId === selectedChatStreamId
-              return (
-                <button
-                  key={candidate.streamId}
-                  type="button"
-                  onClick={() => setSelectedChatStreamId(candidate.streamId)}
-                  className={`shrink-0 inline-flex items-center gap-1.5 rounded border px-2 py-1 text-xs ${
-                    isActive
-                      ? 'bg-blue-700/70 border-blue-500 text-white'
-                      : 'bg-gray-900 border-gray-700 text-gray-300 hover:bg-gray-800'
-                  }`}
-                  title={candidate.title}
-                  aria-label={candidate.title}
-                >
-                  <Image
-                    src={getPlatformIconSrc(candidate.source?.platform)}
-                    alt={candidate.source?.platform ?? 'youtube'}
-                    width={14}
-                    height={14}
-                    className="h-3.5 w-3.5 shrink-0"
-                    draggable={false}
-                  />
-                  <span className="max-w-28 truncate">{candidate.title}</span>
-                </button>
-              )
-            })}
-          </div>
+                <div className="px-3 py-2 border-b border-gray-800 flex items-center gap-2 overflow-x-auto">
+                  {chatCandidates.map((candidate) => {
+                    const isActive = candidate.streamId === selectedChatStreamId
+                    return (
+                      <button
+                        key={candidate.streamId}
+                        type="button"
+                        onClick={() => setSelectedChatStreamId(candidate.streamId)}
+                        className={`shrink-0 inline-flex items-center gap-1.5 rounded border px-2 py-1 text-xs ${
+                          isActive
+                            ? 'bg-blue-700/70 border-blue-500 text-white'
+                            : 'bg-gray-900 border-gray-700 text-gray-300 hover:bg-gray-800'
+                        }`}
+                        title={candidate.title}
+                        aria-label={candidate.title}
+                      >
+                        <Image
+                          src={getPlatformIconSrc(candidate.source?.platform)}
+                          alt={candidate.source?.platform ?? 'youtube'}
+                          width={14}
+                          height={14}
+                          className="h-3.5 w-3.5 shrink-0"
+                          draggable={false}
+                        />
+                        <span className="max-w-28 truncate">{candidate.title}</span>
+                      </button>
+                    )
+                  })}
+                </div>
 
-          <div className="flex-1 bg-black relative">
-            {displayedChatUrl ? (
-              <>
-                <iframe
-                  src={displayedChatUrl}
-                  title="Live chat"
-                  className="w-full h-full"
-                  referrerPolicy="strict-origin-when-cross-origin"
-                />
-                {pendingChatUrl ? (
-                  <iframe
-                    src={pendingChatUrl}
-                    title="Live chat preloading"
-                    className="absolute inset-0 w-full h-full opacity-0 pointer-events-none"
-                    referrerPolicy="strict-origin-when-cross-origin"
-                    onLoad={() => {
-                      setDisplayedChatUrl(pendingChatUrl)
-                      setPendingChatUrl(null)
-                      setIsChatSwitching(false)
-                    }}
-                  />
-                ) : null}
-                {isChatSwitching ? (
-                  <div className="absolute inset-0 pointer-events-none bg-black/15" />
-                ) : null}
-              </>
-            ) : !selectedChatCandidate ? (
-              <div className="h-full w-full flex items-center justify-center text-center px-4">
-                <p className="text-xs text-gray-400">{t('chat.selectChannel')}</p>
+                <div className="flex-1 min-h-0 bg-black relative overflow-hidden">
+                  {displayedChatUrl ? (
+                    <>
+                      <iframe
+                        src={displayedChatUrl}
+                        title="Live chat"
+                        className="block w-full h-full"
+                        referrerPolicy="strict-origin-when-cross-origin"
+                      />
+                      {pendingChatUrl ? (
+                        <iframe
+                          src={pendingChatUrl}
+                          title="Live chat preloading"
+                          className="absolute inset-0 block w-full h-full opacity-0 pointer-events-none"
+                          referrerPolicy="strict-origin-when-cross-origin"
+                          onLoad={() => {
+                            setDisplayedChatUrl(pendingChatUrl)
+                            setPendingChatUrl(null)
+                            setIsChatSwitching(false)
+                          }}
+                        />
+                      ) : null}
+                      {isChatSwitching ? (
+                        <div className="absolute inset-0 pointer-events-none bg-black/15" />
+                      ) : null}
+                    </>
+                  ) : !selectedChatCandidate ? (
+                    <div className="h-full w-full flex items-center justify-center text-center px-4">
+                      <p className="text-xs text-gray-400">{t('chat.selectChannel')}</p>
+                    </div>
+                  ) : (
+                    <div className="h-full w-full flex items-center justify-center text-center px-4">
+                      <p className="text-xs text-gray-400">{t('chat.unavailable')}</p>
+                    </div>
+                  )}
+                </div>
               </div>
-            ) : (
-              <div className="h-full w-full flex items-center justify-center text-center px-4">
-                <p className="text-xs text-gray-400">{t('chat.unavailable')}</p>
+            </SheetContent>
+          </Sheet>
+        ) : (
+          <Drawer open={isChatOpen} onOpenChange={setIsChatOpen} shouldScaleBackground={false}>
+            <DrawerContent
+              overlayClassName="bg-transparent pointer-events-none"
+              className="h-[75vh] max-h-[75vh] overflow-hidden border-t border-gray-800 bg-gray-950/95 p-0 pb-[env(safe-area-inset-bottom)]"
+            >
+              <DrawerTitle className="sr-only">{t('app.chat')}</DrawerTitle>
+              <DrawerDescription className="sr-only">{t('chat.selectChannel')}</DrawerDescription>
+              <div className="h-full min-h-0 flex flex-col overflow-hidden">
+                <div className="px-3 py-2 border-b border-gray-800 flex items-center justify-between gap-2">
+                  <p className="text-sm font-semibold text-gray-100">{t('app.chat')}</p>
+                  <button
+                    type="button"
+                    onClick={() => setIsChatOpen(false)}
+                    aria-label={t('input.cancel')}
+                    className="h-7 w-7 inline-flex items-center justify-center rounded text-gray-300 hover:bg-gray-800 hover:text-white"
+                  >
+                    <X className="size-4" />
+                  </button>
+                </div>
+
+                <div className="px-3 py-2 border-b border-gray-800 flex items-center gap-2 overflow-x-auto">
+                  {chatCandidates.map((candidate) => {
+                    const isActive = candidate.streamId === selectedChatStreamId
+                    return (
+                      <button
+                        key={candidate.streamId}
+                        type="button"
+                        onClick={() => setSelectedChatStreamId(candidate.streamId)}
+                        className={`shrink-0 inline-flex items-center gap-1.5 rounded border px-2 py-1 text-xs ${
+                          isActive
+                            ? 'bg-blue-700/70 border-blue-500 text-white'
+                            : 'bg-gray-900 border-gray-700 text-gray-300 hover:bg-gray-800'
+                        }`}
+                        title={candidate.title}
+                        aria-label={candidate.title}
+                      >
+                        <Image
+                          src={getPlatformIconSrc(candidate.source?.platform)}
+                          alt={candidate.source?.platform ?? 'youtube'}
+                          width={14}
+                          height={14}
+                          className="h-3.5 w-3.5 shrink-0"
+                          draggable={false}
+                        />
+                        <span className="max-w-28 truncate">{candidate.title}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+
+                <div className="flex-1 min-h-0 bg-black relative overflow-y-auto">
+                  {displayedChatUrl ? (
+                    <>
+                      <iframe
+                        src={displayedChatUrl}
+                        title="Live chat"
+                        className="block w-full h-full"
+                        referrerPolicy="strict-origin-when-cross-origin"
+                      />
+                      {pendingChatUrl ? (
+                        <iframe
+                          src={pendingChatUrl}
+                          title="Live chat preloading"
+                          className="absolute inset-0 block w-full h-full opacity-0 pointer-events-none"
+                          referrerPolicy="strict-origin-when-cross-origin"
+                          onLoad={() => {
+                            setDisplayedChatUrl(pendingChatUrl)
+                            setPendingChatUrl(null)
+                            setIsChatSwitching(false)
+                          }}
+                        />
+                      ) : null}
+                      {isChatSwitching ? (
+                        <div className="absolute inset-0 pointer-events-none bg-black/15" />
+                      ) : null}
+                    </>
+                  ) : !selectedChatCandidate ? (
+                    <div className="h-full w-full flex items-center justify-center text-center px-4">
+                      <p className="text-xs text-gray-400">{t('chat.selectChannel')}</p>
+                    </div>
+                  ) : (
+                    <div className="h-full w-full flex items-center justify-center text-center px-4">
+                      <p className="text-xs text-gray-400">{t('chat.unavailable')}</p>
+                    </div>
+                  )}
+                </div>
               </div>
-            )}
-          </div>
-        </aside>
+            </DrawerContent>
+          </Drawer>
+        )
+      )}
+
+
+      {!isWelcomeMode && isClientMounted && !isDesktop && !isChatOpen && (
+        <button
+          type="button"
+          onClick={() => setIsChatOpen(true)}
+          aria-label={t('app.chat')}
+          className="fixed bottom-2 left-1/2 -translate-x-1/2 z-40 inline-flex items-center gap-2 rounded-full border border-gray-700 bg-gray-900/95 px-3 py-1.5 text-xs text-gray-200 shadow-lg backdrop-blur-sm hover:bg-gray-800"
+        >
+          <span className="block h-1.5 w-10 rounded-full bg-gray-600" />
+          <MessageSquareText className="size-3.5" />
+          <span>{t('app.chat')}</span>
+        </button>
       )}
 
       {loadingOverlayMessage && (
