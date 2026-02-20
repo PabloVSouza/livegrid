@@ -39,12 +39,14 @@ export const LivestreamGrid: FC<Props> = ({ livestreams, onRemove, onSelectSourc
   const isInteractingRef = useRef(false)
   const [isInteracting, setIsInteracting] = useState(false)
   const [isResizeInvalid, setIsResizeInvalid] = useState(false)
+  const [interactionRowsOverride, setInteractionRowsOverride] = useState<number | null>(null)
   const [manualLayout, setManualLayout] = useState<LayoutItem[] | null>(null)
   const lastValidLayoutRef = useRef<LayoutItem[] | null>(null)
   const resizeRejectedRef = useRef(false)
   const resizeGrewRef = useRef(false)
   const interactionItemIdRef = useRef<string | null>(null)
   const dragStartLayoutRef = useRef<LayoutItem[] | null>(null)
+  const bottomEdgeHoldSinceRef = useRef<number | null>(null)
   const modeLayoutStorageKey = `${layoutStorageKey}_${gridSize.width < 768 ? "mobile" : "desktop"}`
 
   useEffect(() => {
@@ -81,17 +83,13 @@ export const LivestreamGrid: FC<Props> = ({ livestreams, onRemove, onSelectSourc
 
   const dynamicRowsBase = useMemo(() => {
     if (metrics.isMobile) return metrics.rows
-    return Math.max(metrics.rows, manualMaxRow, livestreams.length)
-  }, [metrics, manualMaxRow, livestreams.length])
+    return Math.max(metrics.rows, manualMaxRow)
+  }, [metrics, manualMaxRow])
 
   const interactionRows = useMemo(() => {
-    if (metrics.isMobile) {
-      if (!isInteracting) return dynamicRowsBase
-      return Math.max(dynamicRowsBase, metrics.rows + Math.max(2, livestreams.length))
-    }
     if (!isInteracting) return dynamicRowsBase
-    return Math.max(dynamicRowsBase, metrics.rows + 12)
-  }, [metrics, dynamicRowsBase, isInteracting, livestreams.length])
+    return Math.max(dynamicRowsBase, interactionRowsOverride ?? dynamicRowsBase)
+  }, [dynamicRowsBase, interactionRowsOverride, isInteracting])
 
   const layoutMetrics = useMemo(
     () => ({ ...metrics, rows: interactionRows }),
@@ -148,13 +146,23 @@ export const LivestreamGrid: FC<Props> = ({ livestreams, onRemove, onSelectSourc
     isInteractingRef.current = true
     setIsInteracting(true)
     setIsResizeInvalid(false)
+    setInteractionRowsOverride(null)
+    bottomEdgeHoldSinceRef.current = null
   }
 
   const canResizeFitAll = (resizedItem: LayoutItem): boolean => {
-    const totalCells = layoutMetrics.cols * layoutMetrics.rows
-    const otherWindowsMinCells = Math.max(0, livestreams.length - 1)
-    const maxAllowedArea = Math.max(1, totalCells - otherWindowsMinCells)
-    return resizedItem.w * resizedItem.h <= maxAllowedArea
+    return resizedItem.w <= layoutMetrics.cols && resizedItem.h >= 1
+  }
+
+  const maybeGrowInteractionRows = (item: LayoutItem, forceAtEdge = false) => {
+    const bottom = item.y + item.h
+    if (!forceAtEdge && bottom <= layoutMetrics.rows) return
+    if (forceAtEdge && bottom < layoutMetrics.rows) return
+
+    setInteractionRowsOverride((prev) => {
+      const current = prev ?? dynamicRowsBase
+      return Math.max(current, layoutMetrics.rows + 1)
+    })
   }
 
   const commitLayout = (
@@ -167,6 +175,8 @@ export const LivestreamGrid: FC<Props> = ({ livestreams, onRemove, onSelectSourc
     isInteractingRef.current = false
     setIsInteracting(false)
     setIsResizeInvalid(false)
+    setInteractionRowsOverride(null)
+    bottomEdgeHoldSinceRef.current = null
     if (!Array.isArray(layoutArg)) return
     const layoutItems = layoutArg as LayoutItem[]
     const streamIds = new Set(livestreams.map((stream) => stream.id))
@@ -317,6 +327,35 @@ export const LivestreamGrid: FC<Props> = ({ livestreams, onRemove, onSelectSourc
     }
   }
 
+  const onDrag = (layoutArg: unknown, oldItemArg: unknown, newItemArg: unknown) => {
+    void layoutArg
+    void oldItemArg
+    if (!newItemArg || typeof newItemArg !== "object") return
+
+    const dragging = newItemArg as LayoutItem
+    const bottom = dragging.y + dragging.h
+    const touchingBottomEdge = bottom >= layoutMetrics.rows
+
+    if (!touchingBottomEdge) {
+      bottomEdgeHoldSinceRef.current = null
+      return
+    }
+
+    const now = Date.now()
+    const holdSince = bottomEdgeHoldSinceRef.current
+    if (!holdSince) {
+      bottomEdgeHoldSinceRef.current = now
+      return
+    }
+
+    // If user keeps the dragged item at the bottom edge for > 1s,
+    // open one extra row.
+    if (now - holdSince >= 1000) {
+      maybeGrowInteractionRows(dragging, true)
+      bottomEdgeHoldSinceRef.current = now
+    }
+  }
+
   const onDragStop = (layoutArg: unknown, oldItemArg: unknown, newItemArg: unknown) => {
     const streamIds = new Set(livestreams.map((stream) => stream.id))
     const droppedItem = newItemArg && typeof newItemArg === "object" ? (newItemArg as LayoutItem) : null
@@ -328,6 +367,7 @@ export const LivestreamGrid: FC<Props> = ({ livestreams, onRemove, onSelectSourc
         isInteractingRef.current = false
         setIsInteracting(false)
         setIsResizeInvalid(false)
+        bottomEdgeHoldSinceRef.current = null
         const safeSwap = hasOutOfBounds(swapped, layoutMetrics)
           ? repairLayoutToVisible(swapped, streamIds, layoutMetrics, draggedId)
           : swapped
@@ -344,6 +384,7 @@ export const LivestreamGrid: FC<Props> = ({ livestreams, onRemove, onSelectSourc
       isInteractingRef.current = false
       setIsInteracting(false)
       setIsResizeInvalid(false)
+      bottomEdgeHoldSinceRef.current = null
 
       const sourceLayout = Array.isArray(layoutArg) ? (layoutArg as LayoutItem[]) : layout
       const targetY = droppedItem?.y ?? 0
@@ -390,6 +431,7 @@ export const LivestreamGrid: FC<Props> = ({ livestreams, onRemove, onSelectSourc
       resizeGrewRef.current = true
     }
     interactionItemIdRef.current = resized.i ?? null
+    maybeGrowInteractionRows(resized)
     const valid = canResizeFitAll(resized)
     if (!valid) {
       setIsResizeInvalid(true)
@@ -414,6 +456,8 @@ export const LivestreamGrid: FC<Props> = ({ livestreams, onRemove, onSelectSourc
       isInteractingRef.current = false
       setIsInteracting(false)
       setIsResizeInvalid(false)
+      setInteractionRowsOverride(null)
+      bottomEdgeHoldSinceRef.current = null
       interactionItemIdRef.current = null
       if (lastValidLayoutRef.current) {
         setManualLayout(lastValidLayoutRef.current)
@@ -508,6 +552,7 @@ export const LivestreamGrid: FC<Props> = ({ livestreams, onRemove, onSelectSourc
           backgroundPosition: "0 0, 0 0"
         }}
         onDragStart={onDragStart as any}
+        onDrag={onDrag as any}
         onDragStop={onDragStop as any}
         onResizeStart={onResizeStart as any}
         onResize={onResize as any}
