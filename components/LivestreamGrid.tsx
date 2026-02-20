@@ -73,16 +73,49 @@ export const LivestreamGrid: FC<Props> = ({ livestreams, onRemove, onSelectSourc
     [gridSize.width, gridSize.height, livestreams.length]
   )
 
+  const manualMaxRow = useMemo(() => {
+    if (!manualLayout || manualLayout.length === 0) return 0
+    return manualLayout.reduce((max, item) => Math.max(max, item.y + item.h), 0)
+  }, [manualLayout])
+
+  const dynamicRowsBase = useMemo(() => {
+    if (metrics.isMobile) return metrics.rows
+    return Math.max(metrics.rows, manualMaxRow, livestreams.length)
+  }, [metrics, manualMaxRow, livestreams.length])
+
+  const interactionRows = useMemo(() => {
+    if (metrics.isMobile) return dynamicRowsBase
+    if (!isInteracting) return dynamicRowsBase
+    return Math.max(dynamicRowsBase, metrics.rows + 12)
+  }, [metrics, dynamicRowsBase, isInteracting])
+
+  const layoutMetrics = useMemo(
+    () => ({ ...metrics, rows: interactionRows }),
+    [metrics, interactionRows]
+  )
+
   const streamIdsInOrder = useMemo(() => livestreams.map((stream) => stream.id), [livestreams])
   const defaultLayout = useMemo(
     () => buildEvenLayout(streamIdsInOrder, metrics),
     [streamIdsInOrder, metrics]
   )
   const layout = useMemo(
-    () => buildLayoutPreservingManual(streamIdsInOrder, manualLayout, defaultLayout, metrics),
-    [streamIdsInOrder, manualLayout, defaultLayout, metrics]
+    () => buildLayoutPreservingManual(streamIdsInOrder, manualLayout, defaultLayout, layoutMetrics),
+    [streamIdsInOrder, manualLayout, defaultLayout, layoutMetrics]
   )
   const cellWidth = metrics.layoutWidth / metrics.cols
+  const occupiedRows = useMemo(() => {
+    if (layout.length === 0) return metrics.rows
+    return Math.max(metrics.rows, layout.reduce((max, item) => Math.max(max, item.y + item.h), 0))
+  }, [layout, metrics.rows])
+
+  const gridRenderRows = useMemo(() => {
+    if (metrics.isMobile) return occupiedRows
+    if (!isInteracting) return occupiedRows
+    return Math.max(occupiedRows, interactionRows)
+  }, [metrics.isMobile, occupiedRows, isInteracting, interactionRows])
+
+  const gridRenderHeightPx = Math.max(gridSize.height, Math.ceil(gridRenderRows * metrics.rowHeight))
 
   useEffect(() => {
     if (!isInteractingRef.current) {
@@ -95,17 +128,17 @@ export const LivestreamGrid: FC<Props> = ({ livestreams, onRemove, onSelectSourc
     if (livestreams.length === 0) return
 
     const streamIds = new Set(livestreams.map((stream) => stream.id))
-    if (!hasOutOfBounds(layout, metrics) && !hasOverlap(layout)) return
+    if (!hasOutOfBounds(layout, layoutMetrics) && !hasOverlap(layout)) return
 
-    const repaired = repairLayoutToVisible(layout, streamIds, metrics)
+    const repaired = repairLayoutToVisible(layout, streamIds, layoutMetrics)
     const packed = metrics.isMobile ? packMobileNoGaps(repaired, streamIds) : repaired
 
-    if (hasOutOfBounds(packed, metrics) || hasOverlap(packed)) return
+    if (hasOutOfBounds(packed, layoutMetrics) || hasOverlap(packed)) return
 
     setManualLayout(packed)
     saveStoredManualLayout(modeLayoutStorageKey, packed)
     lastValidLayoutRef.current = packed
-  }, [layout, livestreams, metrics, modeLayoutStorageKey])
+  }, [layout, livestreams, layoutMetrics, modeLayoutStorageKey])
 
   const onInteractionStart = () => {
     isInteractingRef.current = true
@@ -114,7 +147,7 @@ export const LivestreamGrid: FC<Props> = ({ livestreams, onRemove, onSelectSourc
   }
 
   const canResizeFitAll = (resizedItem: LayoutItem): boolean => {
-    const totalCells = metrics.cols * metrics.rows
+    const totalCells = layoutMetrics.cols * layoutMetrics.rows
     const otherWindowsMinCells = Math.max(0, livestreams.length - 1)
     const maxAllowedArea = Math.max(1, totalCells - otherWindowsMinCells)
     return resizedItem.w * resizedItem.h <= maxAllowedArea
@@ -138,8 +171,8 @@ export const LivestreamGrid: FC<Props> = ({ livestreams, onRemove, onSelectSourc
       mode === "resize"
         ? (() => {
             // Keep the exact resize result if it still fits and doesn't overlap.
-            const direct = sanitizeLayoutFromGrid(layoutItems, streamIds, metrics)
-            if (!hasOutOfBounds(direct, metrics) && !hasOverlap(direct)) {
+            const direct = sanitizeLayoutFromGrid(layoutItems, streamIds, layoutMetrics)
+            if (!hasOutOfBounds(direct, layoutMetrics) && !hasOverlap(direct)) {
               return direct
             }
 
@@ -149,24 +182,24 @@ export const LivestreamGrid: FC<Props> = ({ livestreams, onRemove, onSelectSourc
             }
 
             // Reflow only affected items first, keeping unaffected cells untouched when possible.
-            const minimal = resolveResizeWithMinimalMoves(layoutItems, streamIds, metrics, activeId)
-            if (!hasOutOfBounds(minimal, metrics) && !hasOverlap(minimal)) {
+            const minimal = resolveResizeWithMinimalMoves(layoutItems, streamIds, layoutMetrics, activeId)
+            if (!hasOutOfBounds(minimal, layoutMetrics) && !hasOverlap(minimal)) {
               return minimal
             }
 
-            return repairLayoutToVisible(minimal, streamIds, metrics, activeId)
+            return repairLayoutToVisible(minimal, streamIds, layoutMetrics, activeId)
           })()
-        : sanitizeLayoutFromGrid(layoutItems, streamIds, metrics)
+        : sanitizeLayoutFromGrid(layoutItems, streamIds, layoutMetrics)
     let next = metrics.isMobile ? packMobileNoGaps(nextUnpacked, streamIds) : nextUnpacked
-    if (mode === "drag" && (hasOutOfBounds(next, metrics) || hasOverlap(next))) {
-      const repaired = repairLayoutToVisible(next, streamIds, metrics, activeId)
+    if (mode === "drag" && (hasOutOfBounds(next, layoutMetrics) || hasOverlap(next))) {
+      const repaired = repairLayoutToVisible(next, streamIds, layoutMetrics, activeId)
       next = metrics.isMobile ? packMobileNoGaps(repaired, streamIds) : repaired
     }
-    if (mode === "resize" && resizeGrew && (hasOutOfBounds(next, metrics) || hasOverlap(next))) {
-      const repaired = repairLayoutToVisible(next, streamIds, metrics, activeId)
+    if (mode === "resize" && resizeGrew && (hasOutOfBounds(next, layoutMetrics) || hasOverlap(next))) {
+      const repaired = repairLayoutToVisible(next, streamIds, layoutMetrics, activeId)
       next = metrics.isMobile ? packMobileNoGaps(repaired, streamIds) : repaired
     }
-    if (hasOutOfBounds(next, metrics) || hasOverlap(next)) {
+    if (hasOutOfBounds(next, layoutMetrics) || hasOverlap(next)) {
       if (lastValidLayoutRef.current) {
         setManualLayout(lastValidLayoutRef.current)
       }
@@ -315,7 +348,7 @@ export const LivestreamGrid: FC<Props> = ({ livestreams, onRemove, onSelectSourc
         gridConfig={{
           cols: metrics.cols,
           rowHeight: metrics.rowHeight,
-          maxRows: metrics.rows,
+          maxRows: layoutMetrics.rows,
           margin: [0, 0],
           containerPadding: [0, 0]
         }}
@@ -331,7 +364,7 @@ export const LivestreamGrid: FC<Props> = ({ livestreams, onRemove, onSelectSourc
         }}
         width={metrics.layoutWidth}
         style={{
-          height: metrics.isMobile ? `${metrics.contentHeight}px` : "100%",
+          height: `${gridRenderHeightPx}px`,
           backgroundColor: "#030712",
           backgroundImage:
             "linear-gradient(to right, rgba(59,130,246,0.12) 1px, transparent 1px), linear-gradient(to bottom, rgba(59,130,246,0.12) 1px, transparent 1px)",
