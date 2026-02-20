@@ -2,10 +2,10 @@
 
 import { useEffect, useId, useRef, useState } from 'react'
 import Image from 'next/image'
-import type { FC, PointerEvent as ReactPointerEvent } from 'react'
+import type { FC } from 'react'
 import { useI18n } from '@components/i18n'
 import type { Livestream, LivestreamSource } from '@components/types'
-import { RotateCw, Volume2, VolumeX } from 'lucide-react'
+import { Expand, RotateCw, Volume2, VolumeX } from 'lucide-react'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -106,7 +106,6 @@ export const LivestreamPlayer: FC<LivestreamPlayerProps> = ({ stream, onRemove, 
   const twitchHasStartedRef = useRef(false)
   const twitchPlayAttemptsRef = useRef(0)
   const lastYoutubeResumeAttemptRef = useRef(0)
-  const lastTapRef = useRef<{ time: number; x: number; y: number }>({ time: 0, x: 0, y: 0 })
   const twitchContainerId = useId().replace(/:/g, '_')
 
   const sources: LivestreamSource[] =
@@ -422,96 +421,77 @@ export const LivestreamPlayer: FC<LivestreamPlayerProps> = ({ stream, onRemove, 
   }
 
 
-  const handleMobileDoubleTap = (event: ReactPointerEvent<HTMLDivElement>): void => {
-    if (event.pointerType !== 'touch') return
-    const target = event.target as HTMLElement | null
-    if (target?.closest('.no-drag')) return
-
-    const now = Date.now()
-    const last = lastTapRef.current
-    const dx = Math.abs(event.clientX - last.x)
-    const dy = Math.abs(event.clientY - last.y)
-    const isDoubleTap = now - last.time < 350 && dx < 24 && dy < 24
-
-    if (isDoubleTap) {
-      event.preventDefault()
-      void toggleFullscreen()
-      lastTapRef.current = { time: 0, x: 0, y: 0 }
-      return
-    }
-
-    lastTapRef.current = { time: now, x: event.clientX, y: event.clientY }
-  }
-
-
   return (
     <div ref={rootRef} className="flex flex-col h-full bg-black overflow-hidden border-r border-b border-gray-800">
       <div
         className="drag-handle h-6 flex items-center justify-between bg-gray-900 px-2 border-b border-gray-800 cursor-move select-none"
         style={{ touchAction: 'none' }}
-        onDoubleClick={() => void toggleFullscreen()}
-        onPointerUp={handleMobileDoubleTap}
       >
-        <div className="flex items-center gap-2 min-w-0 flex-1">
-          <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse shrink-0" />
-          <div className="flex-1 min-w-0">
-            <h3 className="text-xs font-semibold truncate text-gray-100 inline-block max-w-full leading-none">
-              {stream.title}
-            </h3>
-          </div>
-        </div>
-        {sources.length > 1 && (
-          <div className="no-drag ml-1 flex items-center gap-1">
+        <div className="flex items-center min-w-0 flex-1 gap-2">
+          <div className="no-drag flex items-center gap-1 shrink-0">
             {sources.map((source) => {
               const isActive = source.sourceId === activeSource.sourceId
+              const isSingleSource = sources.length === 1
               return (
                 <button
                   key={source.sourceId}
                   type="button"
                   onClick={() => onSelectSource(source.sourceId)}
                   title={`${t('player.source')}: ${getSourceDisplayName(source)}`}
-                  className={`h-5 min-w-7 px-1 rounded border text-[10px] font-semibold transition cursor-pointer ${
+                  disabled={isSingleSource}
+                  className={`h-5 w-6 rounded border transition flex items-center justify-center ${
                     isActive
-                      ? 'bg-blue-700/80 border-blue-500 text-white'
-                      : 'bg-gray-800 border-gray-700 text-gray-300 hover:bg-gray-700'
-                  }`}
+                      ? 'bg-blue-700/80 border-blue-500'
+                      : 'bg-gray-800 border-gray-700 hover:bg-gray-700'
+                  } ${isSingleSource ? 'cursor-default' : 'cursor-pointer'}`}
                 >
-                  <span className={source.isLive ? 'text-red-400' : 'text-gray-500'}>●</span>
                   <Image
                     src={getPlatformIconSrc(source.platform)}
                     alt={source.platform}
-                    width={14}
-                    height={14}
-                    className="inline-block ml-1 h-3.5 w-3.5 align-middle"
+                    width={13}
+                    height={13}
+                    className="h-3.5 w-3.5"
                     draggable={false}
                   />
                 </button>
               )
             })}
           </div>
-        )}
-        <button
-          onClick={() => setIsConfirmOpen(true)}
-          className="no-drag ml-1 h-7 w-7 md:h-6 md:w-6 flex items-center justify-center rounded hover:bg-gray-700 transition text-gray-300 hover:text-red-400 shrink-0 touch-manipulation"
-          title={t('player.remove')}
-          aria-label={t('player.remove')}
-        >
-          <svg className="w-4 h-4 md:w-3.5 md:h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M6 18L18 6M6 6l12 12"
-            />
-          </svg>
-        </button>
+          <div className="min-w-0 flex-1">
+            <h3 className="text-[11px] md:text-xs font-semibold truncate text-gray-100 leading-none">
+              {stream.title}
+            </h3>
+          </div>
+        </div>
+        <div className="no-drag flex items-center shrink-0">
+          <button
+            type="button"
+            onClick={() => void toggleFullscreen()}
+            className="h-7 w-7 md:h-6 md:w-6 flex items-center justify-center rounded hover:bg-gray-700 transition text-gray-300 hover:text-gray-100 touch-manipulation"
+            title="Fullscreen"
+            aria-label="Toggle fullscreen"
+          >
+            <Expand className="w-4 h-4 md:w-3.5 md:h-3.5" />
+          </button>
+          <button
+            onClick={() => setIsConfirmOpen(true)}
+            className="h-7 w-7 md:h-6 md:w-6 flex items-center justify-center rounded hover:bg-gray-700 transition text-gray-300 hover:text-red-400 touch-manipulation"
+            title={t('player.remove')}
+            aria-label={t('player.remove')}
+          >
+            <svg className="w-4 h-4 md:w-3.5 md:h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M6 18L18 6M6 6l12 12"
+              />
+            </svg>
+          </button>
+        </div>
       </div>
 
-      <div
-        className="flex-1 bg-black relative"
-        onDoubleClick={() => void toggleFullscreen()}
-        onPointerUp={handleMobileDoubleTap}
-      >
+      <div className="flex-1 bg-black relative">
         <div className="player-live-content w-full h-full">
           {embedUrl ? (
             platform === 'twitch' ? (

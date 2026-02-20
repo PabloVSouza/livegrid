@@ -293,7 +293,7 @@ export const normalizeLivestream = (stream: Livestream): Livestream => {
   const legacySource = toSource(stream)
   const byLabel = new Map<string, LivestreamSource>()
 
-  const allSources = [legacySource, ...(stream.sources ?? [])]
+  const allSources = [...(stream.sources ?? []), legacySource]
   for (const source of allSources) {
     const normalized: LivestreamSource = {
       sourceId: source.sourceId || createId(),
