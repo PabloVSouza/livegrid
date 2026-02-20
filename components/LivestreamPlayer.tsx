@@ -99,6 +99,7 @@ export const LivestreamPlayer: FC<LivestreamPlayerProps> = ({ stream, onRemove, 
   const [isMuted, setIsMuted] = useState(true)
   const [youtubeOrigin, setYoutubeOrigin] = useState('')
   const [reloadNonce, setReloadNonce] = useState(0)
+  const [isPseudoFullscreen, setIsPseudoFullscreen] = useState(false)
   const rootRef = useRef<HTMLDivElement | null>(null)
   const iframeRef = useRef<HTMLIFrameElement | null>(null)
   const twitchContainerRef = useRef<HTMLDivElement | null>(null)
@@ -401,28 +402,60 @@ export const LivestreamPlayer: FC<LivestreamPlayerProps> = ({ stream, onRemove, 
     const fullscreenElement = document.fullscreenElement
     const isCurrent = fullscreenElement === element
 
-    if (isCurrent) {
-      if (document.exitFullscreen) {
-        await document.exitFullscreen()
-      } else {
+    // Fallback mode for iOS/iframe contexts where native fullscreen is blocked.
+    if (isPseudoFullscreen) {
+      setIsPseudoFullscreen(false)
+      return
+    }
+
+    try {
+      if (isCurrent) {
+        if (document.exitFullscreen) {
+          await document.exitFullscreen()
+          return
+        }
         const doc = document as Document & { webkitExitFullscreen?: () => Promise<void> | void }
         await doc.webkitExitFullscreen?.()
+        return
       }
-      return
+
+      if (element.requestFullscreen) {
+        await element.requestFullscreen()
+        return
+      }
+
+      const el = element as HTMLDivElement & { webkitRequestFullscreen?: () => Promise<void> | void }
+      if (el.webkitRequestFullscreen) {
+        await el.webkitRequestFullscreen()
+        return
+      }
+    } catch {
+      // ignore and fallback below
     }
 
-    if (element.requestFullscreen) {
-      await element.requestFullscreen()
-      return
-    }
-
-    const el = element as HTMLDivElement & { webkitRequestFullscreen?: () => Promise<void> | void }
-    await el.webkitRequestFullscreen?.()
+    setIsPseudoFullscreen(true)
   }
 
 
+  useEffect(() => {
+    if (!isPseudoFullscreen || typeof document === 'undefined') return
+
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+
+    return () => {
+      document.body.style.overflow = previousOverflow
+    }
+  }, [isPseudoFullscreen])
+
+
   return (
-    <div ref={rootRef} className="flex flex-col h-full bg-black overflow-hidden border-r border-b border-gray-800">
+    <div
+      ref={rootRef}
+      className={`flex flex-col bg-black overflow-hidden border-r border-b border-gray-800 ${
+        isPseudoFullscreen ? 'fixed inset-0 z-[9999] h-[100dvh] w-screen border-0' : 'h-full'
+      }`}
+    >
       <div
         className="drag-handle h-6 flex items-center justify-between bg-gray-900 px-2 border-b border-gray-800 cursor-move select-none"
         style={{ touchAction: 'none' }}
