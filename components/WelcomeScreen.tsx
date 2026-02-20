@@ -138,7 +138,6 @@ export const WelcomeScreen: FC<WelcomeScreenProps> = ({
       <button
         type="button"
         aria-label={channelsLabel}
-        title={channelsLabel}
         onClick={() => {
           setOpenDetailsId((current) => (current === detailsId ? null : detailsId))
         }}
@@ -228,7 +227,6 @@ export const WelcomeScreen: FC<WelcomeScreenProps> = ({
                       </h4>
                       <button
                         type="button"
-                        title={editProjectLabel}
                         aria-label={editProjectLabel}
                         onClick={() => {
                           setPendingRenameProject(project)
@@ -242,7 +240,6 @@ export const WelcomeScreen: FC<WelcomeScreenProps> = ({
                     <div className="flex items-center gap-1 shrink-0">
                       <button
                         type="button"
-                        title={deleteProjectLabel}
                         aria-label={deleteProjectLabel}
                         onClick={() => setPendingDeleteProject(project)}
                         className="rounded p-1 text-gray-400 hover:bg-gray-800 hover:text-red-400 transition"

@@ -81,11 +81,6 @@ interface LivestreamPlayerProps {
   onSelectSource: (sourceId: string) => void
 }
 
-const getSourceDisplayName = (source: LivestreamSource): string => {
-  const platform = source.platform.toUpperCase()
-  const channel = source.channelId || source.channelUrl
-  return `${platform}: ${channel}`
-}
 
 const getPlatformIconSrc = (platform: LivestreamSource['platform']): string => {
   if (platform === 'youtube') return '/platforms/youtube.svg'
@@ -494,7 +489,6 @@ export const LivestreamPlayer: FC<LivestreamPlayerProps> = ({ stream, onRemove, 
                   key={source.sourceId}
                   type="button"
                   onClick={() => onSelectSource(source.sourceId)}
-                  title={`${t('player.source')}: ${getSourceDisplayName(source)}`}
                   disabled={isSingleSource}
                   className={`h-5 w-6 rounded border transition flex items-center justify-center ${
                     isActive
@@ -525,7 +519,6 @@ export const LivestreamPlayer: FC<LivestreamPlayerProps> = ({ stream, onRemove, 
             type="button"
             onClick={() => void toggleFullscreen()}
             className="h-7 w-7 md:h-6 md:w-6 flex items-center justify-center rounded hover:bg-gray-700 transition text-gray-300 hover:text-gray-100 touch-manipulation"
-            title="Fullscreen"
             aria-label="Toggle fullscreen"
           >
             <Expand className="w-4 h-4 md:w-3.5 md:h-3.5" />
@@ -533,7 +526,6 @@ export const LivestreamPlayer: FC<LivestreamPlayerProps> = ({ stream, onRemove, 
           <button
             onClick={() => setIsConfirmOpen(true)}
             className="h-7 w-7 md:h-6 md:w-6 flex items-center justify-center rounded hover:bg-gray-700 transition text-gray-300 hover:text-red-400 touch-manipulation"
-            title={t('player.remove')}
             aria-label={t('player.remove')}
           >
             <svg className="w-4 h-4 md:w-3.5 md:h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -623,7 +615,6 @@ export const LivestreamPlayer: FC<LivestreamPlayerProps> = ({ stream, onRemove, 
                   recoverPlayback()
                 }}
                 className="no-drag pointer-events-auto absolute top-2 left-2 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 rounded-full border border-gray-600/80 bg-black/55 p-1.5 text-gray-100 backdrop-blur-sm transition-opacity duration-150"
-                title="Recover playback"
                 aria-label="Recover playback"
               >
                 <RotateCw className="h-3.5 w-3.5" />
@@ -654,7 +645,6 @@ export const LivestreamPlayer: FC<LivestreamPlayerProps> = ({ stream, onRemove, 
                   }
                 }}
                 className="absolute top-2 left-2 opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 rounded-full border border-gray-600/80 bg-black/55 p-1.5 text-gray-100 backdrop-blur-sm transition-opacity duration-150"
-                title="Recover playback"
                 aria-label="Recover playback"
               >
                 <RotateCw className="h-3.5 w-3.5" />

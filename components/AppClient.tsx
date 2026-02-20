@@ -51,6 +51,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from '@ui/popover'
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@ui/sheet'
 import { Drawer, DrawerContent, DrawerDescription, DrawerTitle } from '@ui/drawer'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@ui/tooltip'
 import { CirclePlus, Copy, Download, House, Info, Languages, MessageSquareText, Pencil, Share2, X } from 'lucide-react'
 
 
@@ -890,19 +891,23 @@ function AppClientContent() {
                 >
                   {currentProjectName}
                 </p>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => {
-                        setRenameValue(currentProjectName)
-                        setIsRenameOpen(true)
-                      }}
-                      aria-label={t('app.renameProject')}
-                      title={t('app.renameProject')}
-                      className="text-gray-100 hover:bg-gray-800 hover:text-gray-100"
-                    >
-                    <Pencil className="size-4" />
-                  </Button>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => {
+                            setRenameValue(currentProjectName)
+                            setIsRenameOpen(true)
+                          }}
+                          aria-label={t('app.renameProject')}
+                          className="text-gray-100 hover:bg-gray-800 hover:text-gray-100"
+                        >
+                          <Pencil className="size-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>{t('app.renameProject')}</TooltipContent>
+                    </Tooltip>
 
               <URLInput
                 onAddMany={addLivestreams}
@@ -911,7 +916,6 @@ function AppClientContent() {
                     variant="default"
                     size="sm"
                     aria-label={t('input.addChannel')}
-                    title={t('input.addChannel')}
                     className="bg-gray-900 border border-blue-500/70 text-blue-100 hover:bg-blue-900/30 hover:text-white shadow-[0_0_0_1px_rgba(59,130,246,0.25)]"
                   >
                     <CirclePlus className="size-4 mr-1" />
@@ -920,42 +924,54 @@ function AppClientContent() {
                 }
               />
               {!!activeProject && activeLivestreams.length > 0 && (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={openShareDialog}
-                      aria-label={t('app.share')}
-                      title={t('app.share')}
-                      className="text-gray-100 hover:bg-gray-800 hover:text-gray-100"
-                    >
-                      <Share2 className="size-4" />
-                    </Button>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={openShareDialog}
+                          aria-label={t('app.share')}
+                          className="text-gray-100 hover:bg-gray-800 hover:text-gray-100"
+                        >
+                          <Share2 className="size-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>{t('app.share')}</TooltipContent>
+                    </Tooltip>
 
               )}
               {activeLivestreams.length > 0 && (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={toggleChatPanel}
-                      aria-label={t('app.chat')}
-                      title={t('app.chat')}
-                      className="text-gray-100 hover:bg-gray-800 hover:text-gray-100"
-                    >
-                      <MessageSquareText className="size-4" />
-                    </Button>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={toggleChatPanel}
+                          aria-label={t('app.chat')}
+                          className="text-gray-100 hover:bg-gray-800 hover:text-gray-100"
+                        >
+                          <MessageSquareText className="size-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>{t('app.chat')}</TooltipContent>
+                    </Tooltip>
 
               )}
               {isSharedPreviewMode && (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={importSharedPreview}
-                      aria-label={t('app.importShared')}
-                      title={t('app.importShared')}
-                      className="text-gray-100 hover:bg-gray-800 hover:text-gray-100"
-                    >
-                      <Download className="size-4" />
-                    </Button>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={importSharedPreview}
+                          aria-label={t('app.importShared')}
+                          className="text-gray-100 hover:bg-gray-800 hover:text-gray-100"
+                        >
+                          <Download className="size-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>{t('app.importShared')}</TooltipContent>
+                    </Tooltip>
 
               )}
             </div>
@@ -963,34 +979,43 @@ function AppClientContent() {
           </div>
           <div className="flex items-center gap-2 shrink-0">
             {!isWelcomeMode && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => {
-                    setActiveProjectId(null)
-                    setSharedPreview(null)
-                  }}
-                  aria-label={t('app.projects')}
-                  title={t('app.projects')}
-                  className="bg-gray-900 border border-gray-700 text-gray-100 hover:bg-gray-800 hover:text-gray-100"
-                  >
-                    <House className="size-4" />
-                  </Button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => {
+                        setActiveProjectId(null)
+                        setSharedPreview(null)
+                      }}
+                      aria-label={t('app.projects')}
+                      className="bg-gray-900 border border-gray-700 text-gray-100 hover:bg-gray-800 hover:text-gray-100"
+                    >
+                      <House className="size-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>{t('app.projects')}</TooltipContent>
+                </Tooltip>
 
             )}
 
             {isClientMounted ? (
               <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    aria-label={t('app.language')}
-                    className="bg-gray-900 border border-gray-700 text-gray-100 hover:bg-gray-800 hover:text-gray-100"
-                  >
-                    <span className="text-xs font-semibold">{localeShort}</span>
-                  </Button>
-                </PopoverTrigger>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label={t('app.language')}
+                        className="bg-gray-900 border border-gray-700 text-gray-100 hover:bg-gray-800 hover:text-gray-100"
+                      >
+                        <span className="text-xs font-semibold">{localeShort}</span>
+                      </Button>
+                    </PopoverTrigger>
+                  </TooltipTrigger>
+                  <TooltipContent>{t('app.language')}</TooltipContent>
+                </Tooltip>
                 <PopoverContent align="end" className="w-56 bg-gray-900 border-gray-700 p-1">
                   <div className="max-h-72 overflow-auto">
                     {locales.map((option) => (
@@ -1021,15 +1046,20 @@ function AppClientContent() {
                 <span className="text-xs font-semibold">{localeShort}</span>
               </Button>
             )}
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => setIsAboutOpen(true)}
-                  aria-label={t('app.about')}
-                  className="bg-gray-900 border border-gray-700 text-gray-100 hover:bg-gray-800 hover:text-gray-100"
-                >
-                  <Info className="size-4" />
-                </Button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setIsAboutOpen(true)}
+                      aria-label={t('app.about')}
+                      className="bg-gray-900 border border-gray-700 text-gray-100 hover:bg-gray-800 hover:text-gray-100"
+                    >
+                      <Info className="size-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>{t('app.about')}</TooltipContent>
+                </Tooltip>
 
           </div>
         </div>
@@ -1049,7 +1079,6 @@ function AppClientContent() {
                 setIsRenameOpen(true)
               }}
               aria-label={t('app.renameProject')}
-              title={t('app.renameProject')}
               className="h-6 w-6 text-gray-100 hover:bg-gray-800 hover:text-gray-100"
             >
               <Pencil className="size-3.5" />
@@ -1061,7 +1090,6 @@ function AppClientContent() {
                   variant="default"
                   size="sm"
                   aria-label={t('input.addChannel')}
-                  title={t('input.addChannel')}
                   className="h-6 px-2 bg-gray-900 border border-blue-500/70 text-blue-100 hover:bg-blue-900/30 hover:text-white shadow-[0_0_0_1px_rgba(59,130,246,0.25)]"
                 >
                   <CirclePlus className="size-3.5" />
@@ -1074,7 +1102,6 @@ function AppClientContent() {
                 size="icon"
                 onClick={openShareDialog}
                 aria-label={t('app.share')}
-                title={t('app.share')}
                 className="h-6 w-6 text-gray-100 hover:bg-gray-800 hover:text-gray-100"
               >
                 <Share2 className="size-3.5" />
@@ -1086,7 +1113,6 @@ function AppClientContent() {
                 size="icon"
                 onClick={toggleChatPanel}
                 aria-label={t('app.chat')}
-                title={t('app.chat')}
                 className="h-6 w-6 text-gray-100 hover:bg-gray-800 hover:text-gray-100"
               >
                 <MessageSquareText className="size-3.5" />
@@ -1098,7 +1124,6 @@ function AppClientContent() {
                 size="icon"
                 onClick={importSharedPreview}
                 aria-label={t('app.importShared')}
-                title={t('app.importShared')}
                 className="h-6 w-6 text-gray-100 hover:bg-gray-800 hover:text-gray-100"
               >
                 <Download className="size-3.5" />
@@ -1193,7 +1218,6 @@ function AppClientContent() {
                             ? 'bg-blue-700/70 border-blue-500 text-white'
                             : 'bg-gray-900 border-gray-700 text-gray-300 hover:bg-gray-800'
                         }`}
-                        title={candidate.title}
                         aria-label={candidate.title}
                       >
                         <Image
@@ -1215,14 +1239,12 @@ function AppClientContent() {
                     <>
                       <iframe
                         src={displayedChatUrl}
-                        title="Live chat"
                         className="block w-full h-full"
                         referrerPolicy="strict-origin-when-cross-origin"
                       />
                       {pendingChatUrl ? (
                         <iframe
                           src={pendingChatUrl}
-                          title="Live chat preloading"
                           className="absolute inset-0 block w-full h-full opacity-0 pointer-events-none"
                           referrerPolicy="strict-origin-when-cross-origin"
                           onLoad={() => {
@@ -1283,7 +1305,6 @@ function AppClientContent() {
                             ? 'bg-blue-700/70 border-blue-500 text-white'
                             : 'bg-gray-900 border-gray-700 text-gray-300 hover:bg-gray-800'
                         }`}
-                        title={candidate.title}
                         aria-label={candidate.title}
                       >
                         <Image
@@ -1305,14 +1326,12 @@ function AppClientContent() {
                     <>
                       <iframe
                         src={displayedChatUrl}
-                        title="Live chat"
                         className="block w-full h-full"
                         referrerPolicy="strict-origin-when-cross-origin"
                       />
                       {pendingChatUrl ? (
                         <iframe
                           src={pendingChatUrl}
-                          title="Live chat preloading"
                           className="absolute inset-0 block w-full h-full opacity-0 pointer-events-none"
                           referrerPolicy="strict-origin-when-cross-origin"
                           onLoad={() => {
