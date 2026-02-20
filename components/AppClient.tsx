@@ -870,7 +870,7 @@ function AppClientContent() {
 
 
   return (
-    <div className="w-screen h-screen bg-black text-white flex flex-col">
+    <div className="w-screen h-[100dvh] bg-black text-white flex flex-col pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
       <header className="bg-black border-b border-gray-800 px-3 py-2 min-h-16 overflow-hidden">
         <div className="flex items-center justify-between gap-2">
           <div className="min-w-0 flex-1 flex items-center gap-3">

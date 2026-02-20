@@ -6,7 +6,7 @@ import Image from 'next/image'
 import type { FC } from 'react'
 import { useI18n } from '@components/i18n'
 import type { Livestream, LivestreamSource } from '@components/types'
-import { Expand, LogIn, RotateCw, Volume2, VolumeX } from 'lucide-react'
+import { Expand, RotateCw, Volume2, VolumeX } from 'lucide-react'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -413,20 +413,7 @@ export const LivestreamPlayer: FC<LivestreamPlayerProps> = ({ stream, onRemove, 
     setReloadNonce((prev) => prev + 1)
   }
 
-  const openYoutubeVerification = () => {
-    if (typeof window === 'undefined' || platform !== 'youtube') return
 
-    const target = activeSource.channelId
-      ? `https://www.youtube.com/channel/${encodeURIComponent(activeSource.channelId)}/live`
-      : activeSource.channelUrl
-
-    window.open(target, '_blank', 'noopener,noreferrer')
-
-    // Give user a direct way to retry embed after authenticating.
-    window.setTimeout(() => {
-      setReloadNonce((prev) => prev + 1)
-    }, 1200)
-  }
 
   const toggleFullscreen = async (): Promise<void> => {
     if (isIOS) {
@@ -534,17 +521,6 @@ export const LivestreamPlayer: FC<LivestreamPlayerProps> = ({ stream, onRemove, 
           </div>
         </div>
         <div className="no-drag flex items-center shrink-0">
-          {platform === 'youtube' && (
-            <button
-              type="button"
-              onClick={openYoutubeVerification}
-              className="h-7 w-7 md:h-6 md:w-6 flex items-center justify-center rounded hover:bg-gray-700 transition text-gray-300 hover:text-gray-100 touch-manipulation"
-              title="Verify on YouTube"
-              aria-label="Verify on YouTube"
-            >
-              <LogIn className="w-4 h-4 md:w-3.5 md:h-3.5" />
-            </button>
-          )}
           <button
             type="button"
             onClick={() => void toggleFullscreen()}
