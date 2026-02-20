@@ -588,7 +588,6 @@ export const LivestreamPlayer: FC<LivestreamPlayerProps> = ({ stream, onRemove, 
                   toggleMute()
                 }}
                 className="no-drag pointer-events-auto absolute top-2 right-2 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 rounded-full border border-gray-600/80 bg-black/55 p-1.5 text-gray-100 backdrop-blur-sm transition-opacity duration-150"
-                title={isMuted ? 'Unmute' : 'Mute'}
                 aria-label={isMuted ? 'Unmute stream' : 'Mute stream'}
               >
                 {isMuted ? <VolumeX className="h-3.5 w-3.5" /> : <Volume2 className="h-3.5 w-3.5" />}
@@ -611,7 +610,6 @@ export const LivestreamPlayer: FC<LivestreamPlayerProps> = ({ stream, onRemove, 
               type="button"
               onClick={toggleMute}
               className="absolute inset-0 z-10 cursor-pointer bg-transparent no-drag group"
-              title={isMuted ? 'Unmute' : 'Mute'}
               aria-label={isMuted ? 'Unmute stream' : 'Mute stream'}
             >
               <span className="pointer-events-none absolute top-2 right-2 opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 rounded-full border border-gray-600/80 bg-black/55 p-1.5 text-gray-100 backdrop-blur-sm transition-opacity duration-150">
