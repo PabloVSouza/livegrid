@@ -4,18 +4,14 @@
       <stop offset="0" stop-color="#ff3b30"/>
       <stop offset="1" stop-color="#e10600"/>
     </linearGradient>
-    <filter id="softShadow" x="-20%" y="-20%" width="140%" height="140%">
-      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#000000" flood-opacity="0.18"/>
-    </filter>
   </defs>
 
-  <rect x="15" y="15" width="390" height="390" rx="26" fill="#ffffff" stroke="#111111" stroke-width="22"/>
+  <rect x="15" y="15" width="390" height="390" rx="26" fill="#ffffff"/>
 
   <line x1="210" y1="35" x2="210" y2="385" stroke="#111111" stroke-width="16" stroke-linecap="round"/>
   <line x1="35" y1="210" x2="385" y2="210" stroke="#111111" stroke-width="16" stroke-linecap="round"/>
 
   <path
-    filter="url(#softShadow)"
     d="M 150 115
        Q 130 115 130 135
        L 130 285
