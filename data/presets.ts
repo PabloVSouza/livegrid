@@ -24,7 +24,8 @@ export const LIVEGRID_PRESETS: PresetDefinition[] = [
       { title: 'Lives do gORDOx [OFICIAL]', sources: ['@livesdogordox', 'twitch:gordox'] },
       { title: 'INVERNO NA TRANSAMAZÔNICA', sources: ['@INVERNONATRANSAMAZÔNICA'] },
       { title: 'Renato Cariani', sources: ['@renatocariani'] },
-      { title: 'Richard Rasmussen', sources: ['@RichardRasmussenSelvagem'] }
+      { title: 'Richard Rasmussen', sources: ['@RichardRasmussenSelvagem'] },
+      { title: 'Lucivaldo Maia - MOVFIT', sources: ['@lucivaldomaia1'] }
     ]
   }
 ]
