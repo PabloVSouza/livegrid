@@ -12,6 +12,7 @@ export const ptBrMessages: LocaleMessages = {
     'app.currentProject': 'Projeto atual',
     'app.importShared': 'Importar preset compartilhado',
     'app.share': 'Compartilhar',
+    'app.chat': 'Chat',
     'app.shareLink': 'Link compartilhável',
     'app.copy': 'Copiar',
     'app.copied': 'Copiado',
@@ -39,6 +40,9 @@ export const ptBrMessages: LocaleMessages = {
     'app.loadingStartup': 'Preparando o LiveGrid...',
     'app.loadingSharedPreset': 'Abrindo preset compartilhado...',
     'app.loadingImportPreset': 'Importando projeto do preset...',
+    'chat.selectChannel': 'Selecione um canal para abrir o chat da live',
+    'chat.unavailable': 'Chat ao vivo indisponível para a fonte selecionada',
+    'chat.notSupported': 'Esta plataforma ainda não oferece chat embutível',
     'about.title': 'Sobre o LiveGrid',
     'about.description':
       'LiveGrid é um monitor de lives para assistir múltiplos canais do YouTube, Twitch e Kick em um único grid com layout dinâmico.',

@@ -12,6 +12,7 @@ export const enMessages: LocaleMessages = {
     'app.currentProject': 'Current project',
     'app.importShared': 'Import shared preset',
     'app.share': 'Share',
+    'app.chat': 'Chat',
     'app.shareLink': 'Shareable link',
     'app.copy': 'Copy',
     'app.copied': 'Copied',
@@ -39,6 +40,9 @@ export const enMessages: LocaleMessages = {
     'app.loadingStartup': 'Preparing LiveGrid...',
     'app.loadingSharedPreset': 'Opening shared preset...',
     'app.loadingImportPreset': 'Importing preset project...',
+    'chat.selectChannel': 'Select a channel to open live chat',
+    'chat.unavailable': 'Live chat unavailable for the selected source',
+    'chat.notSupported': 'This platform does not provide embeddable chat yet',
     'about.title': 'About LiveGrid',
     'about.description':
       'LiveGrid is a livestream monitor to watch multiple YouTube, Twitch, and Kick channels in a single dynamic grid.',

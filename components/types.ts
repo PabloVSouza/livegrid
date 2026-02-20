@@ -8,6 +8,7 @@ export interface LivestreamSource {
   videoId?: string
   consentRequired?: boolean
   isLive?: boolean
+  avatarUrl?: string
 }
 
 export interface Livestream {

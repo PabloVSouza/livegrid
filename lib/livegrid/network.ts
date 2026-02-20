@@ -53,7 +53,7 @@ export const fetchLiveStatusesBatchRequest = async (
 
 export const resolveChannelsBatchRequest = async (
   urls: string[]
-): Promise<Map<string, { channelId: string; title?: string }>> => {
+): Promise<Map<string, { channelId: string; title?: string; avatarUrl?: string }>> => {
   if (urls.length === 0) return new Map()
 
   const response = await fetch('/api/resolve-channel-batch', {
@@ -68,6 +68,7 @@ export const resolveChannelsBatchRequest = async (
       ok: boolean
       channelId?: string
       title?: string
+      avatarUrl?: string
     }>
   }
 
@@ -75,12 +76,12 @@ export const resolveChannelsBatchRequest = async (
     throw new Error('Failed to resolve channels batch')
   }
 
-  const map = new Map<string, { channelId: string; title?: string }>()
+  const map = new Map<string, { channelId: string; title?: string; avatarUrl?: string }>()
   for (const item of data.results) {
     if (!item.ok || !item.channelId) continue
-    map.set(item.url, { channelId: item.channelId, title: item.title })
+    map.set(item.url, { channelId: item.channelId, title: item.title, avatarUrl: item.avatarUrl })
     if (item.normalizedUrl) {
-      map.set(item.normalizedUrl, { channelId: item.channelId, title: item.title })
+      map.set(item.normalizedUrl, { channelId: item.channelId, title: item.title, avatarUrl: item.avatarUrl })
     }
   }
   return map

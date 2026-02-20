@@ -99,6 +99,7 @@ export const LivestreamPlayer: FC<LivestreamPlayerProps> = ({ stream, onRemove, 
   const [isMuted, setIsMuted] = useState(true)
   const [youtubeOrigin, setYoutubeOrigin] = useState('')
   const [reloadNonce, setReloadNonce] = useState(0)
+  const rootRef = useRef<HTMLDivElement | null>(null)
   const iframeRef = useRef<HTMLIFrameElement | null>(null)
   const twitchContainerRef = useRef<HTMLDivElement | null>(null)
   const twitchPlayerRef = useRef<TwitchPlayerApi | null>(null)
@@ -393,11 +394,39 @@ export const LivestreamPlayer: FC<LivestreamPlayerProps> = ({ stream, onRemove, 
     setReloadNonce((prev) => prev + 1)
   }
 
+  const toggleFullscreen = async (): Promise<void> => {
+    const element = rootRef.current
+    if (!element || typeof document === 'undefined') return
+
+    const fullscreenElement = document.fullscreenElement
+    const isCurrent = fullscreenElement === element
+
+    if (isCurrent) {
+      if (document.exitFullscreen) {
+        await document.exitFullscreen()
+      } else {
+        const doc = document as Document & { webkitExitFullscreen?: () => Promise<void> | void }
+        await doc.webkitExitFullscreen?.()
+      }
+      return
+    }
+
+    if (element.requestFullscreen) {
+      await element.requestFullscreen()
+      return
+    }
+
+    const el = element as HTMLDivElement & { webkitRequestFullscreen?: () => Promise<void> | void }
+    await el.webkitRequestFullscreen?.()
+  }
+
+
   return (
-    <div className="flex flex-col h-full bg-black overflow-hidden border-r border-b border-gray-800">
+    <div ref={rootRef} className="flex flex-col h-full bg-black overflow-hidden border-r border-b border-gray-800">
       <div
         className="drag-handle h-6 flex items-center justify-between bg-gray-900 px-2 border-b border-gray-800 cursor-move select-none"
         style={{ touchAction: 'none' }}
+        onDoubleClick={() => void toggleFullscreen()}
       >
         <div className="flex items-center gap-2 min-w-0 flex-1">
           <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse shrink-0" />
@@ -454,7 +483,7 @@ export const LivestreamPlayer: FC<LivestreamPlayerProps> = ({ stream, onRemove, 
         </button>
       </div>
 
-      <div className="flex-1 bg-black relative">
+      <div className="flex-1 bg-black relative" onDoubleClick={() => void toggleFullscreen()}>
         <div className="player-live-content w-full h-full">
           {embedUrl ? (
             platform === 'twitch' ? (

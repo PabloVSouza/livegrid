@@ -61,6 +61,24 @@ const extractTitle = (html: string): string | null => {
   return null
 }
 
+
+const extractAvatarUrl = (html: string): string | null => {
+  const patterns = [
+    /<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i,
+    /<meta[^>]+name=["']twitter:image["'][^>]+content=["']([^"']+)["']/i
+  ]
+
+  for (const pattern of patterns) {
+    const match = html.match(pattern)
+    if (match?.[1]) {
+      const value = decodeHtml(match[1].trim())
+      if (/^https?:\/\//i.test(value)) return value
+    }
+  }
+
+  return null
+}
+
 const normalizeYoutubeUrl = (input: string): URL | null => {
   const raw = input.trim()
   if (!raw) return null
@@ -104,9 +122,7 @@ const resolveOne = async (rawUrl: string) => {
 
   const normalizedString = normalized.toString()
   const directChannel = normalized.pathname.match(/\/channel\/(UC[\w-]{22})/)
-  if (directChannel?.[1]) {
-    return { url: rawUrl, normalizedUrl: normalizedString, ok: true, channelId: directChannel[1] }
-  }
+  const directChannelId = directChannel?.[1] ?? null
 
   try {
     let response = await fetch(normalizedString, {
@@ -164,7 +180,7 @@ const resolveOne = async (rawUrl: string) => {
       }
     }
 
-    const channelId = extractChannelId(html)
+    const channelId = extractChannelId(html) || directChannelId
     if (!channelId || !CHANNEL_ID_REGEX.test(channelId)) {
       return {
         url: rawUrl,
@@ -179,7 +195,8 @@ const resolveOne = async (rawUrl: string) => {
       normalizedUrl: normalizedString,
       ok: true,
       channelId,
-      title: extractTitle(html) ?? undefined
+      title: extractTitle(html) ?? undefined,
+      avatarUrl: extractAvatarUrl(html) ?? undefined
     }
   } catch {
     return { url: rawUrl, normalizedUrl: normalizedString, ok: false, error: 'Failed to resolve channel' }

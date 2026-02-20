@@ -50,7 +50,14 @@ import {
 } from '@ui/dialog'
 import { Popover, PopoverContent, PopoverTrigger } from '@ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@ui/tooltip'
-import { CirclePlus, Copy, Download, House, Info, Languages, Pencil, Share2 } from 'lucide-react'
+import { CirclePlus, Copy, Download, House, Info, Languages, MessageSquareText, Pencil, Share2, X } from 'lucide-react'
+
+
+const getPlatformIconSrc = (platform: LivestreamSource['platform'] | undefined): string => {
+  if (platform === 'twitch') return '/platforms/twitch.svg'
+  if (platform === 'kick') return '/platforms/kick.svg'
+  return '/platforms/youtube.svg'
+}
 
 function AppClientContent() {
   const { t, locale, setLocale, locales } = useI18n()
@@ -63,12 +70,18 @@ function AppClientContent() {
   const [isAboutOpen, setIsAboutOpen] = useState(false)
   const [isRenameOpen, setIsRenameOpen] = useState(false)
   const [isShareOpen, setIsShareOpen] = useState(false)
+  const [isChatOpen, setIsChatOpen] = useState(false)
+  const [selectedChatStreamId, setSelectedChatStreamId] = useState<string | null>(null)
+  const [displayedChatUrl, setDisplayedChatUrl] = useState<string | null>(null)
+  const [pendingChatUrl, setPendingChatUrl] = useState<string | null>(null)
+  const [isChatSwitching, setIsChatSwitching] = useState(false)
   const [renameValue, setRenameValue] = useState('')
   const [shareUrl, setShareUrl] = useState('')
   const [shareQrDataUrl, setShareQrDataUrl] = useState('')
   const [didCopyShare, setDidCopyShare] = useState(false)
   const [isImportingPresetId, setIsImportingPresetId] = useState<string | null>(null)
   const projectsRef = useRef<LiveGridProject[]>(projects)
+  const resolvedYoutubeAvatarUrlsRef = useRef<Set<string>>(new Set())
   const sharedPreviewRef = useRef<SharedPreviewProject | null>(sharedPreview)
 
   useEffect(() => {
@@ -186,12 +199,88 @@ function AppClientContent() {
     () => activeProject?.livestreams ?? sharedPreview?.livestreams ?? [],
     [activeProject, sharedPreview]
   )
+
+
   const resolveChannelsBatchMutation = useMutation({
     mutationFn: resolveChannelsBatchRequest
   })
   const fetchLiveStatusesBatchMutation = useMutation({
     mutationFn: fetchLiveStatusesBatchRequest
   })
+
+  useEffect(() => {
+    if (!isHydrated) return
+
+    const pendingUrls = Array.from(
+      new Set(
+        activeLivestreams
+          .flatMap((stream) => (normalizeLivestream(stream).sources ?? []))
+          .filter((source) => source.platform === 'youtube' && !source.avatarUrl)
+          .map((source) => source.channelUrl)
+          .filter((url) => url && !resolvedYoutubeAvatarUrlsRef.current.has(url))
+      )
+    )
+
+    if (pendingUrls.length === 0) return
+
+    pendingUrls.forEach((url) => resolvedYoutubeAvatarUrlsRef.current.add(url))
+    let cancelled = false
+
+    const applyAvatarBackfill = async (): Promise<void> => {
+      try {
+        const resolved = await resolveChannelsBatchMutation.mutateAsync(pendingUrls)
+        if (cancelled || resolved.size === 0) return
+
+        const patchStreams = (streams: Livestream[]): Livestream[] =>
+          streams.map((stream) => {
+            const normalized = normalizeLivestream(stream)
+            const currentSources = normalized.sources ?? []
+            let hasChange = false
+            const nextSources = currentSources.map((source) => {
+              if (source.platform !== 'youtube' || source.avatarUrl) return source
+              const match = resolved.get(source.channelUrl)
+              if (!match?.avatarUrl) return source
+              hasChange = true
+              return { ...source, avatarUrl: match.avatarUrl }
+            })
+
+            if (!hasChange) return stream
+            return rebuildLivestreamWithSources(normalized, nextSources, normalized.activeSourceId)
+          })
+
+        if (activeProjectId) {
+          setProjects((prev) =>
+            prev.map((project) =>
+              project.id === activeProjectId
+                ? {
+                    ...project,
+                    livestreams: patchStreams(project.livestreams)
+                  }
+                : project
+            )
+          )
+          return
+        }
+
+        setSharedPreview((prev) =>
+          prev
+            ? {
+                ...prev,
+                livestreams: patchStreams(prev.livestreams)
+              }
+            : prev
+        )
+      } catch {
+        // no-op: keep existing fallback avatar for this session
+      }
+    }
+
+    void applyAvatarBackfill()
+
+    return () => {
+      cancelled = true
+    }
+  }, [activeLivestreams, activeProjectId, isHydrated, resolveChannelsBatchMutation])
 
   const liveStatusSourceEntries = useMemo(() => {
     const unique = new Map<string, LivestreamSource>()
@@ -206,6 +295,105 @@ function AppClientContent() {
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([key, source]) => ({ key, source }))
   }, [activeLivestreams])
+
+
+
+  const chatCandidates = useMemo(() => {
+    return activeLivestreams.map((stream) => {
+      const normalized = normalizeLivestream(stream)
+      const activeSource =
+        normalized.sources?.find((source) => source.sourceId === normalized.activeSourceId) ||
+        normalized.sources?.[0]
+
+      return {
+        streamId: normalized.id,
+        title: normalized.title,
+        source: activeSource
+      }
+    })
+  }, [activeLivestreams])
+
+  useEffect(() => {
+    if (chatCandidates.length === 0) {
+      setSelectedChatStreamId(null)
+      return
+    }
+
+    const exists = selectedChatStreamId
+      ? chatCandidates.some((candidate) => candidate.streamId === selectedChatStreamId)
+      : false
+
+    if (!exists) {
+      setSelectedChatStreamId(chatCandidates[0].streamId)
+    }
+  }, [chatCandidates, selectedChatStreamId])
+
+  const selectedChatCandidate = useMemo(
+    () => chatCandidates.find((candidate) => candidate.streamId === selectedChatStreamId) || null,
+    [chatCandidates, selectedChatStreamId]
+  )
+
+  const selectedChatUrl = useMemo(() => {
+    if (!selectedChatCandidate?.source || typeof window === 'undefined') return null
+
+    const source = selectedChatCandidate.source
+    const host = window.location.hostname || 'localhost'
+
+  if (source.platform === 'youtube') {
+      if (!source.videoId) return null
+      return `https://www.youtube.com/live_chat?v=${encodeURIComponent(source.videoId)}&embed_domain=${encodeURIComponent(host)}`
+    }
+
+    if (source.platform === 'twitch') {
+      if (!source.channelId) return null
+      return `https://www.twitch.tv/popout/${encodeURIComponent(source.channelId)}/chat?popout=&parent=${encodeURIComponent(host)}`
+    }
+
+    if (source.platform === 'kick') {
+      if (!source.channelId) return null
+      return `https://kick.com/${encodeURIComponent(source.channelId)}/chatroom`
+    }
+
+    return null
+  }, [selectedChatCandidate])
+
+  useEffect(() => {
+    if (!selectedChatUrl) {
+      setDisplayedChatUrl(null)
+      setPendingChatUrl(null)
+      setIsChatSwitching(false)
+      return
+    }
+
+    setDisplayedChatUrl((current) => {
+      if (!current) {
+        setPendingChatUrl(null)
+        setIsChatSwitching(false)
+        return selectedChatUrl
+      }
+
+      if (current === selectedChatUrl) {
+        setPendingChatUrl(null)
+        setIsChatSwitching(false)
+        return current
+      }
+
+      setPendingChatUrl(selectedChatUrl)
+      setIsChatSwitching(true)
+      return current
+    })
+  }, [selectedChatUrl])
+
+  const toggleChatPanel = (): void => {
+    setIsChatOpen((prev) => {
+      const next = !prev
+      if (next) {
+        setSelectedChatStreamId(chatCandidates[0]?.streamId ?? null)
+      }
+      return next
+    })
+  }
+
 
   const parseEntriesToSources = (entries: AddChannelRequest[]): ParsedSourceRef[] => {
     const parsed: ParsedSourceRef[] = []
@@ -235,7 +423,7 @@ function AppClientContent() {
         parsedRefs.filter((item) => item.platform === 'youtube').map((item) => item.normalizedUrl)
       )
     )
-    let resolvedYoutube = new Map<string, { channelId: string; title?: string }>()
+    let resolvedYoutube = new Map<string, { channelId: string; title?: string; avatarUrl?: string }>()
     try {
       resolvedYoutube = await resolveChannelsBatchMutation.mutateAsync(youtubeUrls)
     } catch (error) {
@@ -253,7 +441,8 @@ function AppClientContent() {
           sourceId: createId(),
           platform: 'youtube',
           channelUrl: ref.normalizedUrl,
-          channelId: resolved.channelId
+          channelId: resolved.channelId,
+          avatarUrl: resolved.avatarUrl
         }
         if (!resolvedTitleByEntry.has(ref.entryIndex) && resolved.title) {
           resolvedTitleByEntry.set(ref.entryIndex, resolved.title)
@@ -728,6 +917,23 @@ function AppClientContent() {
                   <TooltipContent>{t('app.share')}</TooltipContent>
                 </Tooltip>
               )}
+              {activeLivestreams.length > 0 && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={toggleChatPanel}
+                      aria-label={t('app.chat')}
+                      title={t('app.chat')}
+                      className="text-gray-100 hover:bg-gray-800 hover:text-gray-100"
+                    >
+                      <MessageSquareText className="size-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>{t('app.chat')}</TooltipContent>
+                </Tooltip>
+              )}
               {isSharedPreviewMode && (
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -881,6 +1087,18 @@ function AppClientContent() {
                 <Share2 className="size-3.5" />
               </Button>
             )}
+            {activeLivestreams.length > 0 && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={toggleChatPanel}
+                aria-label={t('app.chat')}
+                title={t('app.chat')}
+                className="h-6 w-6 text-gray-100 hover:bg-gray-800 hover:text-gray-100"
+              >
+                <MessageSquareText className="size-3.5" />
+              </Button>
+            )}
             {isSharedPreviewMode && (
               <Button
                 variant="ghost"
@@ -944,6 +1162,89 @@ function AppClientContent() {
           </div>
         )}
       </main>
+
+      {isChatOpen && !isWelcomeMode && (
+        <aside className="fixed right-0 top-16 bottom-0 z-40 w-80 max-w-[92vw] border-l border-gray-800 bg-gray-950/95 backdrop-blur-sm flex flex-col">
+          <div className="px-3 py-2 border-b border-gray-800 flex items-center justify-between gap-2">
+            <p className="text-sm font-semibold text-gray-100">{t('app.chat')}</p>
+            <button
+              type="button"
+              onClick={() => setIsChatOpen(false)}
+              aria-label={t('input.cancel')}
+              className="h-7 w-7 inline-flex items-center justify-center rounded text-gray-300 hover:bg-gray-800 hover:text-white"
+            >
+              <X className="size-4" />
+            </button>
+          </div>
+
+          <div className="px-3 py-2 border-b border-gray-800 flex items-center gap-2 overflow-x-auto">
+            {chatCandidates.map((candidate) => {
+              const isActive = candidate.streamId === selectedChatStreamId
+              return (
+                <button
+                  key={candidate.streamId}
+                  type="button"
+                  onClick={() => setSelectedChatStreamId(candidate.streamId)}
+                  className={`shrink-0 inline-flex items-center gap-1.5 rounded border px-2 py-1 text-xs ${
+                    isActive
+                      ? 'bg-blue-700/70 border-blue-500 text-white'
+                      : 'bg-gray-900 border-gray-700 text-gray-300 hover:bg-gray-800'
+                  }`}
+                  title={candidate.title}
+                  aria-label={candidate.title}
+                >
+                  <Image
+                    src={getPlatformIconSrc(candidate.source?.platform)}
+                    alt={candidate.source?.platform ?? 'youtube'}
+                    width={14}
+                    height={14}
+                    className="h-3.5 w-3.5 shrink-0"
+                    draggable={false}
+                  />
+                  <span className="max-w-28 truncate">{candidate.title}</span>
+                </button>
+              )
+            })}
+          </div>
+
+          <div className="flex-1 bg-black relative">
+            {displayedChatUrl ? (
+              <>
+                <iframe
+                  src={displayedChatUrl}
+                  title="Live chat"
+                  className="w-full h-full"
+                  referrerPolicy="strict-origin-when-cross-origin"
+                />
+                {pendingChatUrl ? (
+                  <iframe
+                    src={pendingChatUrl}
+                    title="Live chat preloading"
+                    className="absolute inset-0 w-full h-full opacity-0 pointer-events-none"
+                    referrerPolicy="strict-origin-when-cross-origin"
+                    onLoad={() => {
+                      setDisplayedChatUrl(pendingChatUrl)
+                      setPendingChatUrl(null)
+                      setIsChatSwitching(false)
+                    }}
+                  />
+                ) : null}
+                {isChatSwitching ? (
+                  <div className="absolute inset-0 pointer-events-none bg-black/15" />
+                ) : null}
+              </>
+            ) : !selectedChatCandidate ? (
+              <div className="h-full w-full flex items-center justify-center text-center px-4">
+                <p className="text-xs text-gray-400">{t('chat.selectChannel')}</p>
+              </div>
+            ) : (
+              <div className="h-full w-full flex items-center justify-center text-center px-4">
+                <p className="text-xs text-gray-400">{t('chat.unavailable')}</p>
+              </div>
+            )}
+          </div>
+        </aside>
+      )}
 
       {loadingOverlayMessage && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center">
