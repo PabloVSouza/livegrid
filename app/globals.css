@@ -24,6 +24,17 @@ body {
   box-sizing: border-box;
 }
 
+/* Keep scrollbars floating so they do not shift layout */
+@supports (overflow: overlay) {
+  .overflow-auto { overflow: overlay; }
+  .overflow-y-auto { overflow-y: overlay; }
+  .overflow-x-auto { overflow-x: overlay; }
+  .overflow-scroll { overflow: overlay; }
+  .overflow-y-scroll { overflow-y: overlay; }
+  .overflow-x-scroll { overflow-x: overlay; }
+}
+
+
 @theme inline {
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
