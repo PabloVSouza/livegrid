@@ -333,8 +333,9 @@ export const LivestreamGrid: FC<Props> = ({ livestreams, onRemove, onSelectSourc
     if (!newItemArg || typeof newItemArg !== "object") return
 
     const dragging = newItemArg as LayoutItem
-    const bottom = dragging.y + dragging.h
-    const touchingBottomEdge = bottom >= layoutMetrics.rows
+    const bottomPx = (dragging.y + dragging.h) * metrics.rowHeight
+    const edgeThresholdPx = 8
+    const touchingBottomEdge = bottomPx >= gridSize.height - edgeThresholdPx
 
     if (!touchingBottomEdge) {
       bottomEdgeHoldSinceRef.current = null
