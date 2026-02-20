@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useId, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import Image from 'next/image'
 import type { FC } from 'react'
 import { useI18n } from '@components/i18n'
@@ -100,6 +101,8 @@ export const LivestreamPlayer: FC<LivestreamPlayerProps> = ({ stream, onRemove, 
   const [youtubeOrigin, setYoutubeOrigin] = useState('')
   const [reloadNonce, setReloadNonce] = useState(0)
   const [isPseudoFullscreen, setIsPseudoFullscreen] = useState(false)
+  const [isIOS, setIsIOS] = useState(false)
+  const [portalReady, setPortalReady] = useState(false)
   const rootRef = useRef<HTMLDivElement | null>(null)
   const iframeRef = useRef<HTMLIFrameElement | null>(null)
   const twitchContainerRef = useRef<HTMLDivElement | null>(null)
@@ -127,7 +130,8 @@ export const LivestreamPlayer: FC<LivestreamPlayerProps> = ({ stream, onRemove, 
     sources.find((source) => source.sourceId === stream.activeSourceId) || sources[0]
   const platform = activeSource.platform
   const canFallbackByUnknownStatus =
-    platform === 'youtube' ? activeSource.isLive !== false : true
+    platform === 'youtube' ? !isIOS && activeSource.isLive !== false : true
+  const useNativePlayerControls = false
   const youtubeParams = new URLSearchParams({
     autoplay: '1',
     controls: '0',
@@ -143,12 +147,13 @@ export const LivestreamPlayer: FC<LivestreamPlayerProps> = ({ stream, onRemove, 
   if (youtubeOrigin) {
     youtubeParams.set('origin', youtubeOrigin)
   }
+  const youtubeEmbedHost = 'https://www.youtube-nocookie.com'
   const embedUrl =
     platform === 'youtube'
       ? activeSource.videoId
-        ? `https://www.youtube.com/embed/${activeSource.videoId}?${youtubeParams.toString()}`
+        ? `${youtubeEmbedHost}/embed/${activeSource.videoId}?${youtubeParams.toString()}`
         : canFallbackByUnknownStatus && activeSource.channelId
-          ? `https://www.youtube.com/embed/live_stream?channel=${encodeURIComponent(activeSource.channelId)}&${youtubeParams.toString()}`
+          ? `${youtubeEmbedHost}/embed/live_stream?channel=${encodeURIComponent(activeSource.channelId)}&${youtubeParams.toString()}`
         : null
       : platform === 'twitch'
         ? canFallbackByUnknownStatus && activeSource.channelId
@@ -159,9 +164,21 @@ export const LivestreamPlayer: FC<LivestreamPlayerProps> = ({ stream, onRemove, 
           : null
 
   useEffect(() => {
+    if (typeof document !== 'undefined') {
+      setPortalReady(true)
+    }
+  }, [])
+
+  useEffect(() => {
     if (typeof window !== 'undefined' && window.location.hostname) {
       setTwitchParentHost(window.location.hostname)
       setYoutubeOrigin(window.location.origin)
+
+      const ua = window.navigator.userAgent || ''
+      const platform = window.navigator.platform || ''
+      const isIOSDevice = /iPad|iPhone|iPod/.test(ua)
+      const isIPadOS = platform === 'MacIntel' && (window.navigator as Navigator & { maxTouchPoints?: number }).maxTouchPoints! > 1
+      setIsIOS(isIOSDevice || isIPadOS)
     }
   }, [])
 
@@ -245,6 +262,7 @@ export const LivestreamPlayer: FC<LivestreamPlayerProps> = ({ stream, onRemove, 
   }
 
   const tryResumeYoutubePlayback = (): void => {
+    if (isIOS) return
     const now = Date.now()
     if (now - lastYoutubeResumeAttemptRef.current < 4000) return
     lastYoutubeResumeAttemptRef.current = now
@@ -252,9 +270,9 @@ export const LivestreamPlayer: FC<LivestreamPlayerProps> = ({ stream, onRemove, 
   }
 
   useEffect(() => {
-    if (platform !== 'youtube' || !embedUrl) return
+    if (platform !== 'youtube' || !embedUrl || isIOS) return
     postYoutubeCommand(isMuted ? 'mute' : 'unMute')
-  }, [platform, embedUrl, isMuted])
+  }, [platform, embedUrl, isMuted, isIOS])
 
   useEffect(() => {
     if (platform !== 'twitch') return
@@ -289,7 +307,7 @@ export const LivestreamPlayer: FC<LivestreamPlayerProps> = ({ stream, onRemove, 
   }, [platform, embedUrl])
 
   useEffect(() => {
-    if (platform !== 'youtube' || !embedUrl) return
+    if (platform !== 'youtube' || !embedUrl || isIOS) return
 
     const handleMessage = (event: MessageEvent) => {
       if (event.source !== iframeRef.current?.contentWindow) return
@@ -318,7 +336,7 @@ export const LivestreamPlayer: FC<LivestreamPlayerProps> = ({ stream, onRemove, 
     return () => {
       window.removeEventListener('message', handleMessage)
     }
-  }, [platform, embedUrl, isMuted])
+  }, [platform, embedUrl, isMuted, isIOS])
 
   useEffect(() => {
     if (platform !== 'youtube' || !embedUrl) return
@@ -331,7 +349,7 @@ export const LivestreamPlayer: FC<LivestreamPlayerProps> = ({ stream, onRemove, 
     return () => {
       window.clearInterval(intervalId)
     }
-  }, [platform, embedUrl])
+  }, [platform, embedUrl, isIOS])
 
   const toggleMute = (): void => {
     if (!embedUrl) return
@@ -396,13 +414,17 @@ export const LivestreamPlayer: FC<LivestreamPlayerProps> = ({ stream, onRemove, 
   }
 
   const toggleFullscreen = async (): Promise<void> => {
+    if (isIOS) {
+      setIsPseudoFullscreen((prev) => !prev)
+      return
+    }
+
     const element = rootRef.current
     if (!element || typeof document === 'undefined') return
 
     const fullscreenElement = document.fullscreenElement
     const isCurrent = fullscreenElement === element
 
-    // Fallback mode for iOS/iframe contexts where native fullscreen is blocked.
     if (isPseudoFullscreen) {
       setIsPseudoFullscreen(false)
       return
@@ -449,7 +471,7 @@ export const LivestreamPlayer: FC<LivestreamPlayerProps> = ({ stream, onRemove, 
   }, [isPseudoFullscreen])
 
 
-  return (
+  const playerContent = (
     <div
       ref={rootRef}
       className={`flex flex-col bg-black overflow-hidden border-r border-b border-gray-800 ${
@@ -539,13 +561,14 @@ export const LivestreamPlayer: FC<LivestreamPlayerProps> = ({ stream, onRemove, 
                 key={`${platform}:${activeSource.sourceId}:${reloadNonce}`}
                 ref={iframeRef}
                 src={embedUrl}
-                className="w-full h-full pointer-events-none"
+                className={`w-full h-full ${useNativePlayerControls ? 'pointer-events-auto' : 'pointer-events-none'}`}
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
                 title={stream.title}
                 referrerPolicy="strict-origin-when-cross-origin"
+                sandbox="allow-scripts allow-same-origin allow-presentation"
                 tabIndex={-1}
                 onLoad={() => {
-                  if (platform === 'youtube') {
+                  if (platform === 'youtube' && !isIOS) {
                     postYoutubeCommand('addEventListener', ['onReady'])
                     postYoutubeCommand('addEventListener', ['onStateChange'])
                     postYoutubeCommand(isMuted ? 'mute' : 'unMute')
@@ -578,7 +601,7 @@ export const LivestreamPlayer: FC<LivestreamPlayerProps> = ({ stream, onRemove, 
             </div>
           )}
         </div>
-        {embedUrl ? (
+        {embedUrl && !useNativePlayerControls ? (
           platform === 'twitch' ? (
             <div className="absolute inset-0 z-10 pointer-events-none group">
               <button
@@ -668,4 +691,10 @@ export const LivestreamPlayer: FC<LivestreamPlayerProps> = ({ stream, onRemove, 
       </AlertDialog>
     </div>
   )
+
+  if (isPseudoFullscreen && portalReady && typeof document !== 'undefined') {
+    return createPortal(playerContent, document.body)
+  }
+
+  return playerContent
 }
