@@ -72,8 +72,8 @@ export const LivestreamGrid: FC<Props> = ({ livestreams, onRemove, onSelectSourc
   }, [])
 
   const metrics = useMemo(
-    () => computeGridMetrics(gridSize.width, gridSize.height, livestreams.length),
-    [gridSize.width, gridSize.height, livestreams.length]
+    () => computeGridMetrics(gridSize.width, gridSize.height),
+    [gridSize.width, gridSize.height]
   )
 
   const manualMaxRow = useMemo(() => {
@@ -82,9 +82,12 @@ export const LivestreamGrid: FC<Props> = ({ livestreams, onRemove, onSelectSourc
   }, [manualLayout])
 
   const dynamicRowsBase = useMemo(() => {
-    if (metrics.isMobile) return metrics.rows
+    if (metrics.isMobile) {
+      // Keep 16/9 size from viewport metrics, but allow logical rows to grow for scroll.
+      return Math.max(metrics.rows, manualMaxRow, livestreams.length)
+    }
     return Math.max(metrics.rows, manualMaxRow)
-  }, [metrics, manualMaxRow])
+  }, [metrics, manualMaxRow, livestreams.length])
 
   const interactionRows = useMemo(() => {
     if (!isInteracting) return dynamicRowsBase
@@ -163,6 +166,13 @@ export const LivestreamGrid: FC<Props> = ({ livestreams, onRemove, onSelectSourc
       const current = prev ?? dynamicRowsBase
       return Math.max(current, layoutMetrics.rows + 1)
     })
+  }
+
+  const scrollGridDownOneRow = () => {
+    const node = containerRef.current
+    if (!node) return
+    const nextTop = Math.min(node.scrollTop + metrics.rowHeight, node.scrollHeight)
+    node.scrollTo({ top: nextTop, behavior: 'auto' })
   }
 
   const commitLayout = (
@@ -353,6 +363,7 @@ export const LivestreamGrid: FC<Props> = ({ livestreams, onRemove, onSelectSourc
     // open one extra row.
     if (now - holdSince >= 1000) {
       maybeGrowInteractionRows(dragging, true)
+      scrollGridDownOneRow()
       bottomEdgeHoldSinceRef.current = now
     }
   }

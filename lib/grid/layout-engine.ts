@@ -95,7 +95,7 @@ const buildRowHeights = (rowsToUse: number, totalRows: number): number[] => {
   return Array.from({ length: safeRowsToUse }, (_, index) => base + (index < extra ? 1 : 0))
 }
 
-export const computeGridMetrics = (width: number, height: number, itemCount: number): GridMetrics => {
+export const computeGridMetrics = (width: number, height: number): GridMetrics => {
   const safeWidth = Math.max(1, width)
   const safeHeight = Math.max(1, height)
   const isMobile = safeWidth < 768
@@ -110,16 +110,16 @@ export const computeGridMetrics = (width: number, height: number, itemCount: num
 
   if (isMobile) {
     const cols = 1
-    const rows = Math.max(1, itemCount)
     const colWidth = safeWidth
     const fittedRowHeight = rowHeightFromColWidth(colWidth)
-    const contentHeightPx = rows * fittedRowHeight
+    // Base rows must represent how many cells fit in the visible viewport.
+    const rows = Math.max(1, Math.floor(safeHeight / fittedRowHeight))
 
     return {
       width: safeWidth,
       layoutWidth: safeWidth,
       height: safeHeight,
-      contentHeight: contentHeightPx,
+      contentHeight: safeHeight,
       cols,
       rows,
       rowHeight: fittedRowHeight,
