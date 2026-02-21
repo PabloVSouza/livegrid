@@ -95,10 +95,10 @@ const buildRowHeights = (rowsToUse: number, totalRows: number): number[] => {
   return Array.from({ length: safeRowsToUse }, (_, index) => base + (index < extra ? 1 : 0))
 }
 
-export const computeGridMetrics = (width: number, height: number): GridMetrics => {
+export const computeGridMetrics = (width: number, height: number, forceMobile = false): GridMetrics => {
   const safeWidth = Math.max(1, width)
   const safeHeight = Math.max(1, height)
-  const isMobile = safeWidth < 768
+  const isMobile = forceMobile || safeWidth < 768
   const chromeX = STREAM_FRAME_WIDTH_PX
   const chromeY = STREAM_CHROME_HEIGHT_PX + STREAM_FRAME_HEIGHT_PX
 

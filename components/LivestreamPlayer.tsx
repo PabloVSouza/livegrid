@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useId, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
 import Image from 'next/image'
 import type { FC } from 'react'
 import { useI18n } from '@components/i18n'
@@ -97,7 +96,6 @@ export const LivestreamPlayer: FC<LivestreamPlayerProps> = ({ stream, onRemove, 
   const [reloadNonce, setReloadNonce] = useState(0)
   const [isPseudoFullscreen, setIsPseudoFullscreen] = useState(false)
   const [isIOS, setIsIOS] = useState(false)
-  const [portalReady, setPortalReady] = useState(false)
   const rootRef = useRef<HTMLDivElement | null>(null)
   const iframeRef = useRef<HTMLIFrameElement | null>(null)
   const twitchContainerRef = useRef<HTMLDivElement | null>(null)
@@ -105,6 +103,7 @@ export const LivestreamPlayer: FC<LivestreamPlayerProps> = ({ stream, onRemove, 
   const twitchHasStartedRef = useRef(false)
   const twitchPlayAttemptsRef = useRef(0)
   const lastYoutubeResumeAttemptRef = useRef(0)
+  const iosResumeTimeoutsRef = useRef<number[]>([])
   const twitchContainerId = useId().replace(/:/g, '_')
 
   const sources: LivestreamSource[] =
@@ -132,7 +131,7 @@ export const LivestreamPlayer: FC<LivestreamPlayerProps> = ({ stream, onRemove, 
     controls: '0',
     mute: '1',
     rel: '0',
-    fs: '0',
+    fs: '1',
     disablekb: '1',
     iv_load_policy: '3',
     modestbranding: '1',
@@ -158,11 +157,6 @@ export const LivestreamPlayer: FC<LivestreamPlayerProps> = ({ stream, onRemove, 
           ? `https://player.kick.com/${encodeURIComponent(activeSource.channelId)}?autoplay=true&muted=${isMuted ? 'true' : 'false'}`
           : null
 
-  useEffect(() => {
-    if (typeof document !== 'undefined') {
-      setPortalReady(true)
-    }
-  }, [])
 
   useEffect(() => {
     if (typeof window !== 'undefined' && window.location.hostname) {
@@ -264,6 +258,32 @@ export const LivestreamPlayer: FC<LivestreamPlayerProps> = ({ stream, onRemove, 
     postYoutubeCommand('playVideo')
   }
 
+  const triggerIOSYoutubeResume = (): void => {
+    if (!isIOS || platform !== 'youtube' || !embedUrl) return
+
+    iosResumeTimeoutsRef.current.forEach((timeoutId) => window.clearTimeout(timeoutId))
+    iosResumeTimeoutsRef.current = []
+
+    const runResume = (): void => {
+      // iOS can block autoplay with sound after iframe remount/fullscreen transitions.
+      // Start muted first, then restore audio if needed.
+      postYoutubeCommand('mute')
+      postYoutubeCommand('playVideo')
+      if (!isMuted) {
+        const unmuteTimeoutId = window.setTimeout(() => {
+          postYoutubeCommand('unMute')
+        }, 140)
+        iosResumeTimeoutsRef.current.push(unmuteTimeoutId)
+      }
+    }
+
+    runResume()
+    ;[120, 420, 900, 1500].forEach((delay) => {
+      const timeoutId = window.setTimeout(runResume, delay)
+      iosResumeTimeoutsRef.current.push(timeoutId)
+    })
+  }
+
   useEffect(() => {
     if (platform !== 'youtube' || !embedUrl) return
     postYoutubeCommand(isMuted ? 'mute' : 'unMute')
@@ -346,6 +366,32 @@ export const LivestreamPlayer: FC<LivestreamPlayerProps> = ({ stream, onRemove, 
     }
   }, [platform, embedUrl, isIOS])
 
+  useEffect(() => {
+    return () => {
+      iosResumeTimeoutsRef.current.forEach((timeoutId) => window.clearTimeout(timeoutId))
+      iosResumeTimeoutsRef.current = []
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!isIOS || platform !== 'youtube' || !embedUrl || typeof document === 'undefined') return
+
+    const handleFullscreenChange = (): void => {
+      const fullscreenElement = document.fullscreenElement
+      if (fullscreenElement) {
+        triggerIOSYoutubeResume()
+      }
+    }
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange)
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange as EventListener)
+
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange)
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange as EventListener)
+    }
+  }, [isIOS, platform, embedUrl, isMuted])
+
   const toggleMute = (): void => {
     if (!embedUrl) return
     if (platform === 'twitch') {
@@ -411,48 +457,13 @@ export const LivestreamPlayer: FC<LivestreamPlayerProps> = ({ stream, onRemove, 
 
 
   const toggleFullscreen = async (): Promise<void> => {
-    if (isIOS) {
-      setIsPseudoFullscreen((prev) => !prev)
-      return
+    if (typeof document === 'undefined') return
+
+    const nextPseudo = !isPseudoFullscreen
+    setIsPseudoFullscreen(nextPseudo)
+    if (nextPseudo) {
+      triggerIOSYoutubeResume()
     }
-
-    const element = rootRef.current
-    if (!element || typeof document === 'undefined') return
-
-    const fullscreenElement = document.fullscreenElement
-    const isCurrent = fullscreenElement === element
-
-    if (isPseudoFullscreen) {
-      setIsPseudoFullscreen(false)
-      return
-    }
-
-    try {
-      if (isCurrent) {
-        if (document.exitFullscreen) {
-          await document.exitFullscreen()
-          return
-        }
-        const doc = document as Document & { webkitExitFullscreen?: () => Promise<void> | void }
-        await doc.webkitExitFullscreen?.()
-        return
-      }
-
-      if (element.requestFullscreen) {
-        await element.requestFullscreen()
-        return
-      }
-
-      const el = element as HTMLDivElement & { webkitRequestFullscreen?: () => Promise<void> | void }
-      if (el.webkitRequestFullscreen) {
-        await el.webkitRequestFullscreen()
-        return
-      }
-    } catch {
-      // ignore and fallback below
-    }
-
-    setIsPseudoFullscreen(true)
   }
 
 
@@ -467,12 +478,88 @@ export const LivestreamPlayer: FC<LivestreamPlayerProps> = ({ stream, onRemove, 
     }
   }, [isPseudoFullscreen])
 
+  useEffect(() => {
+    if (typeof document === 'undefined') return
+
+    const gridItem = rootRef.current?.closest('.react-grid-item') as HTMLElement | null
+    if (!gridItem) return
+
+    if (!isPseudoFullscreen) return
+
+    const previousPosition = gridItem.style.position
+    const previousInset = gridItem.style.inset
+    const previousTop = gridItem.style.top
+    const previousLeft = gridItem.style.left
+    const previousRight = gridItem.style.right
+    const previousBottom = gridItem.style.bottom
+    const previousWidth = gridItem.style.width
+    const previousHeight = gridItem.style.height
+    const previousTransform = gridItem.style.transform
+    const previousMaxWidth = gridItem.style.maxWidth
+    const previousMaxHeight = gridItem.style.maxHeight
+    const previousZIndex = gridItem.style.zIndex
+
+    const applyFullscreenViewport = (): void => {
+      const vv = window.visualViewport
+      const width = Math.round(vv?.width ?? window.innerWidth)
+      const height = Math.round(vv?.height ?? window.innerHeight)
+      const offsetTop = Math.round(vv?.offsetTop ?? 0)
+      const offsetLeft = Math.round(vv?.offsetLeft ?? 0)
+
+      gridItem.style.setProperty('position', 'fixed', 'important')
+      gridItem.style.setProperty('inset', 'auto', 'important')
+      gridItem.style.setProperty('top', `${offsetTop}px`, 'important')
+      gridItem.style.setProperty('left', `${offsetLeft}px`, 'important')
+      gridItem.style.setProperty('right', 'auto', 'important')
+      gridItem.style.setProperty('bottom', 'auto', 'important')
+      gridItem.style.setProperty('width', `${width}px`, 'important')
+      gridItem.style.setProperty('height', `${height}px`, 'important')
+      gridItem.style.setProperty('max-width', `${width}px`, 'important')
+      gridItem.style.setProperty('max-height', `${height}px`, 'important')
+      gridItem.style.setProperty('transform', 'none', 'important')
+      gridItem.style.setProperty('z-index', '9998', 'important')
+    }
+
+    const delayedSyncTimeouts: number[] = []
+    const syncWithDelays = (): void => {
+      applyFullscreenViewport()
+      ;[80, 220, 500].forEach((delay) => {
+        delayedSyncTimeouts.push(window.setTimeout(applyFullscreenViewport, delay))
+      })
+    }
+
+    syncWithDelays()
+    window.addEventListener('resize', syncWithDelays)
+    window.addEventListener('orientationchange', syncWithDelays)
+    window.visualViewport?.addEventListener('resize', syncWithDelays)
+    window.visualViewport?.addEventListener('scroll', syncWithDelays)
+
+    return () => {
+      window.removeEventListener('resize', syncWithDelays)
+      window.removeEventListener('orientationchange', syncWithDelays)
+      window.visualViewport?.removeEventListener('resize', syncWithDelays)
+      window.visualViewport?.removeEventListener('scroll', syncWithDelays)
+      delayedSyncTimeouts.forEach((timeoutId) => window.clearTimeout(timeoutId))
+      gridItem.style.position = previousPosition
+      gridItem.style.inset = previousInset
+      gridItem.style.top = previousTop
+      gridItem.style.left = previousLeft
+      gridItem.style.right = previousRight
+      gridItem.style.bottom = previousBottom
+      gridItem.style.width = previousWidth
+      gridItem.style.height = previousHeight
+      gridItem.style.transform = previousTransform
+      gridItem.style.maxWidth = previousMaxWidth
+      gridItem.style.maxHeight = previousMaxHeight
+      gridItem.style.zIndex = previousZIndex
+    }
+  }, [isPseudoFullscreen])
 
   const playerContent = (
     <div
       ref={rootRef}
-      className={`flex flex-col bg-black overflow-hidden border-r border-b border-gray-800 ${
-        isPseudoFullscreen ? 'fixed inset-0 z-[9999] h-[100dvh] w-screen border-0' : 'h-full'
+      className={`flex h-full min-h-0 flex-col overflow-hidden bg-black border-r border-b border-gray-800 ${
+        isPseudoFullscreen ? 'border-0' : ''
       }`}
     >
       <div
@@ -540,7 +627,7 @@ export const LivestreamPlayer: FC<LivestreamPlayerProps> = ({ stream, onRemove, 
         </div>
       </div>
 
-      <div className="flex-1 bg-black relative">
+      <div className="flex-1 bg-black relative" style={{ touchAction: 'pan-y' }}>
         <div className="player-live-content w-full h-full">
           {embedUrl ? (
             platform === 'twitch' ? (
@@ -566,6 +653,8 @@ export const LivestreamPlayer: FC<LivestreamPlayerProps> = ({ stream, onRemove, 
                       postYoutubeCommand('addEventListener', ['onReady'])
                       postYoutubeCommand('addEventListener', ['onStateChange'])
                       tryResumeYoutubePlayback()
+                    } else {
+                      triggerIOSYoutubeResume()
                     }
                     postYoutubeCommand(isMuted ? 'mute' : 'unMute')
                   }
@@ -626,7 +715,7 @@ export const LivestreamPlayer: FC<LivestreamPlayerProps> = ({ stream, onRemove, 
             <button
               type="button"
               onClick={toggleMute}
-              className="absolute inset-0 z-10 cursor-pointer bg-transparent no-drag group"
+              className="absolute inset-0 z-10 cursor-pointer bg-transparent no-drag group touch-pan-y"
               aria-label={isMuted ? 'Unmute stream' : 'Mute stream'}
             >
               <span className="pointer-events-none absolute top-2 right-2 opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 rounded-full border border-gray-600/80 bg-black/55 p-1.5 text-gray-100 backdrop-blur-sm transition-opacity duration-150">
@@ -684,10 +773,6 @@ export const LivestreamPlayer: FC<LivestreamPlayerProps> = ({ stream, onRemove, 
       </AlertDialog>
     </div>
   )
-
-  if (isPseudoFullscreen && portalReady && typeof document !== 'undefined') {
-    return createPortal(playerContent, document.body)
-  }
 
   return playerContent
 }

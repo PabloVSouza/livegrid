@@ -31,6 +31,7 @@ interface Props {
 
 export const LivestreamGrid: FC<Props> = ({ livestreams, onRemove, onSelectSource, layoutStorageKey }) => {
   const containerRef = useRef<HTMLDivElement | null>(null)
+  const [preferMobileLayout, setPreferMobileLayout] = useState(false)
   const [gridSize, setGridSize] = useState({
     // Keep first render deterministic between SSR and client hydration.
     width: 1920,
@@ -47,7 +48,28 @@ export const LivestreamGrid: FC<Props> = ({ livestreams, onRemove, onSelectSourc
   const interactionItemIdRef = useRef<string | null>(null)
   const dragStartLayoutRef = useRef<LayoutItem[] | null>(null)
   const bottomEdgeHoldSinceRef = useRef<number | null>(null)
-  const modeLayoutStorageKey = `${layoutStorageKey}_${gridSize.width < 768 ? "mobile" : "desktop"}`
+  const isMobileMode = gridSize.width < 768 || preferMobileLayout
+  const modeLayoutStorageKey = `${layoutStorageKey}_${isMobileMode ? "mobile" : "desktop"}`
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+
+    const updateMobilePreference = () => {
+      const touchPoints = window.navigator.maxTouchPoints ?? 0
+      const coarsePointer = window.matchMedia?.("(pointer: coarse)").matches ?? false
+      const shortestSide = Math.min(window.innerWidth, window.innerHeight)
+      const isPhoneLikeTouch = (touchPoints > 0 || coarsePointer) && shortestSide <= 950
+      setPreferMobileLayout(isPhoneLikeTouch)
+    }
+
+    updateMobilePreference()
+    window.addEventListener("resize", updateMobilePreference)
+    window.addEventListener("orientationchange", updateMobilePreference)
+    return () => {
+      window.removeEventListener("resize", updateMobilePreference)
+      window.removeEventListener("orientationchange", updateMobilePreference)
+    }
+  }, [])
 
   useEffect(() => {
     const migrated = migrateLegacyManualLayout(layoutStorageKey, modeLayoutStorageKey)
@@ -72,8 +94,8 @@ export const LivestreamGrid: FC<Props> = ({ livestreams, onRemove, onSelectSourc
   }, [])
 
   const metrics = useMemo(
-    () => computeGridMetrics(gridSize.width, gridSize.height),
-    [gridSize.width, gridSize.height]
+    () => computeGridMetrics(gridSize.width, gridSize.height, isMobileMode),
+    [gridSize.width, gridSize.height, isMobileMode]
   )
 
   const manualMaxRow = useMemo(() => {
