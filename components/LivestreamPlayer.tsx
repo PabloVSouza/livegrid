@@ -265,9 +265,9 @@ export const LivestreamPlayer: FC<LivestreamPlayerProps> = ({ stream, onRemove, 
   }
 
   useEffect(() => {
-    if (platform !== 'youtube' || !embedUrl || isIOS) return
+    if (platform !== 'youtube' || !embedUrl) return
     postYoutubeCommand(isMuted ? 'mute' : 'unMute')
-  }, [platform, embedUrl, isMuted, isIOS])
+  }, [platform, embedUrl, isMuted])
 
   useEffect(() => {
     if (platform !== 'twitch') return
@@ -561,11 +561,13 @@ export const LivestreamPlayer: FC<LivestreamPlayerProps> = ({ stream, onRemove, 
                 referrerPolicy="strict-origin-when-cross-origin"
                 tabIndex={-1}
                 onLoad={() => {
-                  if (platform === 'youtube' && !isIOS) {
-                    postYoutubeCommand('addEventListener', ['onReady'])
-                    postYoutubeCommand('addEventListener', ['onStateChange'])
+                  if (platform === 'youtube') {
+                    if (!isIOS) {
+                      postYoutubeCommand('addEventListener', ['onReady'])
+                      postYoutubeCommand('addEventListener', ['onStateChange'])
+                      tryResumeYoutubePlayback()
+                    }
                     postYoutubeCommand(isMuted ? 'mute' : 'unMute')
-                    tryResumeYoutubePlayback()
                   }
                 }}
               />
