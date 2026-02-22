@@ -479,6 +479,22 @@ export const LivestreamPlayer: FC<LivestreamPlayerProps> = ({ stream, onRemove, 
   }, [isPseudoFullscreen])
 
   useEffect(() => {
+    if (!isPseudoFullscreen || typeof window === 'undefined') return
+
+    const handleKeyDown = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        setIsPseudoFullscreen(false)
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [isPseudoFullscreen])
+
+  useEffect(() => {
     if (typeof document === 'undefined') return
 
     const gridItem = rootRef.current?.closest('.react-grid-item') as HTMLElement | null
@@ -612,20 +628,22 @@ export const LivestreamPlayer: FC<LivestreamPlayerProps> = ({ stream, onRemove, 
           >
             <Expand className="w-4 h-4 md:w-3.5 md:h-3.5" />
           </button>
-          <button
-            onClick={() => setIsConfirmOpen(true)}
-            className="h-7 w-7 md:h-6 md:w-6 flex items-center justify-center rounded hover:bg-gray-700 transition text-gray-300 hover:text-red-400 touch-manipulation"
-            aria-label={t('player.remove')}
-          >
-            <svg className="w-4 h-4 md:w-3.5 md:h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M6 18L18 6M6 6l12 12"
-              />
-            </svg>
-          </button>
+          {!isPseudoFullscreen ? (
+            <button
+              onClick={() => setIsConfirmOpen(true)}
+              className="h-7 w-7 md:h-6 md:w-6 flex items-center justify-center rounded hover:bg-gray-700 transition text-gray-300 hover:text-red-400 touch-manipulation"
+              aria-label={t('player.remove')}
+            >
+              <svg className="w-4 h-4 md:w-3.5 md:h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M6 18L18 6M6 6l12 12"
+                />
+              </svg>
+            </button>
+          ) : null}
         </div>
       </div>
 
