@@ -559,7 +559,9 @@ export const LivestreamPlayer: FC<LivestreamPlayerProps> = ({ stream, onRemove, 
     <div
       ref={rootRef}
       className={`flex h-full min-h-0 flex-col overflow-hidden bg-black border-r border-b border-gray-800 ${
-        isPseudoFullscreen ? 'border-0' : ''
+        isPseudoFullscreen
+          ? 'border-0 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]'
+          : ''
       }`}
     >
       <div
